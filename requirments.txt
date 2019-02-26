@@ -1,0 +1,10 @@
+sklearn
+numpy
+h5py
+tensorflow-gpu
+https://download.pytorch.org/whl/cu90/torch-1.0.1-cp36-cp36m-win_amd64.whl
+torchvision
+matplotlib
+seaborn
+tqdm
+numba
