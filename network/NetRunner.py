@@ -17,7 +17,7 @@ import importlib
 import tensorflow as tf
 
 from utils.DataParser import DataParser
-from network.wrappers import ConvNet, UNet, VGG16
+from network.wrappers import ConvNet, UNet, FakeDetection
 
 
 class NetRunner:
@@ -152,8 +152,10 @@ class NetRunner:
                 in_shape = NotImplementedError
                 gt_shape = NotImplementedError
             elif self.task_type is 'detection':
-                in_shape = NotImplementedError
-                gt_shape = NotImplementedError
+                in_shape = [None, self.img_size[0], self.img_size[1], self.img_size[2]]
+                gt_shape = [None, 4+self.num_classes, None]
+                self._in_data = tf.placeholder(tf.float32, shape=in_shape, name='Input_train')
+                self._gt_data = tf.placeholder(tf.float32, shape=gt_shape, name='GT_train')
             else:
                 raise ValueError('Task not supported')
 
@@ -177,12 +179,12 @@ class NetRunner:
             self.update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
 
             self.network = self._pick_model()
-            self.pred_output = self.network.build_net_tf(self.in_data)
+            self.pred_output = self.network.build_net(self.in_data)
             self.global_step = tf.train.get_or_create_global_step()
 
             with tf.control_dependencies(self.update_ops):
                 self.loss = self.network.return_loss(y_pred=self.pred_output, y_true=self.gt_data)
-                self.train_op = self.network.return_optimizer(self.global_step)
+                self.train_op = self.network.return_optimizer(global_step=self.global_step)
                 self.accuracy = self.network.return_accuracy(y_pred=self.pred_output, y_true=self.gt_data,
                                                              b_s=self.batch_size, net_type=self.task_type,
                                                              loss_type=self.loss_type)
@@ -240,6 +242,11 @@ class NetRunner:
             self.graph_op = tf.global_variables_initializer()
 
     def build_pytorch_pipeline(self):
+        self.learning_rate = self.lr
+        self.network = self._pick_model()
+
+        self.train_op = self.network.return_optimizer(net_param=self.network.parameters())
+
         return NotImplementedError
 
 
@@ -248,17 +255,30 @@ class NetRunner:
         Pick a deep model specified by self.network_type string
         :return:
         """
-        if self.network_type == 'ConvNet':
-            return ConvNet.ConvNet(self.network_type, self.loss_type, self.accuracy_type, self.learning_rate,
-                                   training=self.training_mode, framework=self.framework, num_classes=self.num_classes, trainable_layers=self.trainable_layers)
-        elif self.network_type == 'UNet':
-            return UNet.UNet(self.network_type, self.loss_type, self.accuracy_type, self.learning_rate, training=self.training_mode, framework=self.framework,
-                             trainable_layers=self.trainable_layers, num_classes=self.num_classes)
-        elif self.network_type == 'VGG16':
-            return VGG16.VGG16(self.network_type, self.loss_type, self.accuracy_type, self.learning_rate,
-                               training=self.training_mode, framework=self.framework, num_classes=self.num_classes, trainable_layers=self.trainable_layers)
-        else:
-            return ValueError('Architecture does not exist')
+        if self.framework == "tensorflow":
+            if self.network_type == 'ConvNet':
+                return ConvNet.ConvNet(self.network_type, self.loss_type, self.accuracy_type, self.learning_rate, framework=self.framework,
+                                       training=self.is_training, num_filters=self.num_filters, nonlin=self.nonlin, num_classes=self.num_classes,
+                                          trainable_layers=self.trainable_layers)
+            elif self.network_type == 'UNet':
+                return UNet.UNet(self.network_type, self.loss_type, self.accuracy_type, self.learning_rate,  framework=self.framework, training=self.training_mode,
+                                 trainable_layers=self.trainable_layers, num_classes=self.num_classes)
+            # elif self.network_type == 'VGG16':
+            #         #     return VGG16.VGG16(self.network_type, self.loss_type, self.accuracy_type, self.learning_rate,
+            #         #                        training=self.training_mode, framework=self.framework, num_classes=self.num_classes, trainable_layers=self.trainable_layers)
+            elif self.network_type == 'FakeDetection':
+                return FakeDetection.FakeDetection(self.network_type, self.loss_type, self.accuracy_type, self.learning_rate, training=self.training_mode,
+                                 trainable_layers=self.trainable_layers, num_classes=self.num_classes)
+            else:
+                raise ValueError('Architecture does not exist')
+        elif self.framework == "pytorch":
+            if self.network_type == 'ConvNet':
+                return ConvNet.ConvNet_pt(self.network_type, self.loss_type, self.accuracy_type, self.learning_rate, framework=self.framework,
+                                       training=self.is_training, num_filters=self.num_filters, nonlin=self.nonlin, num_classes=self.num_classes,
+                                          trainable_layers=self.trainable_layers)
+            else:
+                raise ValueError('Architecture does not exist')
+
 
     def _initialize_short_summary(self):
         """

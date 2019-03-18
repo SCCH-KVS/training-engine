@@ -30,6 +30,13 @@ from utils.utils import log_loss_accuracy
 from utils.gradcam.GradCAM import grad_cam_plus_plus as gradcam
 
 
+import torch
+from torch.autograd import Variable
+from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR
+import torch.onnx as torch_onnx
+
+
+
 class TrainRunner(NetRunner):
     def __init__(self, args=None, experiment_id=None):
         super().__init__(args, experiment_id)
@@ -46,11 +53,12 @@ class TrainRunner(NetRunner):
         self._initialize_training()
 
     def _initialize_training(self):
-        if self.framework is 'tensorflow':
+        if self.framework == 'tensorflow':
             self.build_tensorflow_pipeline()
             self._run_tensorflow_pipeline()
-        elif self.framework is 'pytorch':
+        elif self.framework == 'pytorch':
             self.build_pytorch_pipeline()
+            self._run_pytorch_pipeline()
         else:
             raise ValueError('Framework is not supported')
 
@@ -97,13 +105,13 @@ class TrainRunner(NetRunner):
                     self.net_params.append(long_summ)
                 short_summ = self._initialize_short_summary()
                 self.summ_params.append(short_summ)
-                if not os.path.isdir(os.path.join(self.tr_path, self.data_set, self.timestamp)):
-                    os.mkdir(os.path.join(self.tr_path, self.data_set, self.timestamp))
+                # if not os.path.isdir(os.path.join(self.tr_path)):
+                #     os.mkdir(os.path.join(self.tr_path, self.data_set, self.timestamp))
 
-                summary_log_file_train = os.path.join(self.tr_path, self.data_set, self.timestamp, 'train', self.timestamp + '_split_' + str(split))
+                summary_log_file_train = os.path.join(self.tr_path,  'train', self.timestamp + '_split_' + str(split))
                 train_summary_writer = tf.summary.FileWriter(summary_log_file_train, sess.graph)
 
-                summary_log_file_valid = os.path.join(self.tr_path, self.data_set, self.timestamp, 'valid', self.timestamp + '_split_' + str(split))
+                summary_log_file_valid = os.path.join(self.tr_path, 'valid', self.timestamp + '_split_' + str(split))
                 valid_summary_writer = tf.summary.FileWriter(summary_log_file_valid, sess.graph)
 
                 saver = tf.train.Saver(save_relative_paths=True)
@@ -272,10 +280,16 @@ class TrainRunner(NetRunner):
                             .format(epoch, train_aver_loss, epoch_acc_str_tr, epoch_duration_train, valid_aver_loss,
                                     epoch_acc_str_val, epoch_duration_valid))
                         if prev_loss > valid_aver_loss:
-                            if not os.path.isdir(os.path.join(self.ckpnt_path, self.data_set, self.timestamp)):
-                                os.mkdir(os.path.join(self.ckpnt_path, self.data_set, self.timestamp))
+                            # if not os.path.isdir(os.path.join(self.ckpnt_path, self.data_set, self.timestamp)):
+                            #     os.mkdir(os.path.join(self.ckpnt_path, self.data_set, self.timestamp))
+                            #
+                            # model_file_path = os.path.join('experiments', 'ckpnt_logs', self.data_set, self.timestamp, self.timestamp + '_split_' + str(split))
 
-                            model_file_path = os.path.join('experiments', 'ckpnt_logs', self.data_set, self.timestamp, self.timestamp + '_split_' + str(split))
+                            model_file_path = os.path.join(self.ckpnt_path,
+                                                           self.timestamp + '_split_' + str(split))
+                            if not os.path.exists(model_file_path):
+                                os.makedirs(model_file_path)
+
                             saver.save(sess, "{}/model.ckpt".format(model_file_path), global_step=epoch)
 
                             # onnx_graph = tf2onnx.tfonnx.process_tf_graph(sess.graph, output_names=["output:0"])
@@ -305,3 +319,203 @@ class TrainRunner(NetRunner):
             coord.join(enqueue_threads)
 
         h5_file.close()
+
+
+    def _run_pytorch_pipeline(self):
+        h5_file = h5py.File(self.h5_data_file, 'r')
+
+        with open(self.json_log, 'r') as f:
+            json_log = json.load(f)
+
+        train_split = []
+        valid_split = []
+        cross_val_split = json_log['data_log']['cross_val_split']
+        if len(cross_val_split) == 2:
+            train_split.append(cross_val_split[0])
+            valid_split.append(cross_val_split[1])
+        else:
+            for i in range(len(cross_val_split)):
+                valid_split.append(cross_val_split[i])
+                train_split.append([].extend(cross_val_split[j]) for j in range(len(cross_val_split)) if j != i)
+
+        for split in range(len(cross_val_split) - 1):
+            print("Cross validation split {} of {}".format(str(split + 1), str(len(cross_val_split) - 1)))
+            event_time = time.time()
+            global_step = 0
+
+            # TODO: add training and validation log summary
+
+            learn_rate = self.lr
+            prev_loss = np.inf
+            ref_counter = 0
+            ref_iter_count = 0
+            total_recall_counter_train = 0
+            total_recall_counter_valid = 0
+
+            # liveloss = PlotLosses()
+
+            # loss_plot_path = os.path.join(self.checkpoint_dir, 'prj_'+str(self.project_id), 'training_loss')
+            # loss_plot_path = os.path.join(self.experiment_path, 'training_loss')
+            # if not os.path.exists(loss_plot_path):
+            #     os.makedirs(loss_plot_path)
+
+
+            rp = ReduceLROnPlateau(self.train_op, factor=self.lr_decay, patience=self.ref_patience)
+
+            for epoch in range(1, self.num_epochs + 1):
+                train_generator = BatchIterator(h5_file, train_split[split], self.img_size, self.num_classes, self.batch_size,
+                                                        self.task_type, self.is_training)
+
+                train_lim = train_generator.get_max_lim()
+                valid_generator = BatchIterator(h5_file, valid_split[split], self.img_size, self.num_classes, self.batch_size,
+                                                        self.task_type, self.is_training)
+                valid_lim = valid_generator.get_max_lim()
+                epoch_loss_train = 0
+                epoch_loss_valid = 0
+
+                epoch_accur_train = 0
+                epoch_accur_valid = 0
+
+                epoch_duration_train = 0
+                epoch_duration_valid = 0
+
+                print("image dimentions")
+                print([self.img_size[0], self.img_size[1], self.img_size[2]])
+
+                for i in tqdm(train_generator, total=train_lim, unit=' steps', desc='Epoch {:d} train'.format(epoch)):
+                    total_recall_counter_train += 1
+                    # start_time = time.time()
+                    ff = list(i)
+
+                    outputs = self.network(torch.from_numpy(np.array([np.reshape(f[0], [self.img_size[0], self.img_size[1], self.img_size[2]]) for f
+                                            in ff]).transpose((0,3,1,2))).float())
+                    loss = self.network.return_loss(outputs, torch.from_numpy(np.array([f[1] for f in ff])).long())
+                    self.train_op.zero_grad()
+                    loss.backward()
+                    self.train_op.step()
+
+                    train_step_accuracy = int(self.network.return_accuracy(outputs, torch.from_numpy(np.array([f[1] for f in ff])),  self.batch_size,
+                                                self.task_type))
+
+                    epoch_loss_train += loss.item()
+                    epoch_accur_train += (100*train_step_accuracy)/self.batch_size
+
+                for i in tqdm(valid_generator, total=valid_lim, unit=' steps', desc='Epoch {:d} valid'.format(epoch)):
+                    total_recall_counter_valid += 1
+                    # start_time = time.time()
+                    ff = list(i)
+
+                    outputs = self.network(torch.from_numpy(np.array([np.reshape(f[0], [self.img_size[0], self.img_size[1], self.img_size[2]]) for f
+                                            in ff]).transpose((0,3,1,2))).float())
+                    loss = self.network.return_loss(outputs, torch.from_numpy(np.array([f[1] for f in ff])).long())
+
+                    valid_step_accuracy = int(self.network.return_accuracy(outputs, torch.from_numpy(np.array([f[1] for f in ff])), 1,
+                                                self.task_type))
+
+                    epoch_loss_valid += loss.item()
+                    epoch_accur_valid += (100*valid_step_accuracy)/self.batch_size
+
+                train_aver_loss = epoch_loss_train / train_lim
+                valid_aver_loss = epoch_loss_valid / valid_lim
+
+                print(epoch_accur_train)
+
+                if self.task_type == 'classification':
+                    epoch_accur_train = epoch_accur_train / train_lim
+                    epoch_accur_valid = epoch_accur_valid / valid_lim
+                    # epoch_acc_str_tr = log_loss_accuracy(epoch_accur_train, self.accuracy_type, self.task_type,
+                    #                                      self.num_classes)
+                    # epoch_acc_str_val = log_loss_accuracy(epoch_accur_valid, self.accuracy_type, self.task_type,
+                    #                                       self.num_classes)
+                elif self.task_type == 'segmentation':
+                    epoch_accur_train = epoch_accur_train / train_lim
+                    epoch_accur_valid = epoch_accur_valid / valid_lim
+                    # epoch_acc_str_tr = log_loss_accuracy(epoch_accur_train, self.accuracy_type, self.task_type,
+                    #                                      self.num_classes)
+                    # epoch_acc_str_val = log_loss_accuracy(epoch_accur_valid, self.accuracy_type, self.task_type,
+                    #                                       self.num_classes)
+
+                # print(
+                #     '\nRESULTS: epoch {:d} train loss = {:.3f}, train accuracy : {:.3f} ({:.2f} sec) || '
+                #     'valid loss = {:.3f}, valid accuracy : {:.3f} ({:.2f} sec)'
+                #     .format(epoch, train_aver_loss, epoch_accur_train, epoch_duration_train, valid_aver_loss,
+                #             epoch_accur_valid, epoch_duration_valid))
+
+                prev_lr = self.train_op.param_groups[0]['lr']
+                rp.step(valid_aver_loss)
+                curr_lr = self.train_op.param_groups[0]['lr']
+                # print("Prev lr: {} Curr lr: {}".format(prev_lr, curr_lr))
+                #
+                # print('update loss')
+                # liveloss.update({
+                #         'log loss': train_aver_loss,
+                #         'val_log loss': valid_aver_loss,
+                #         'accuracy': epoch_accur_train,
+                #         'val_accuracy': epoch_accur_valid})
+                # # print('draw loss')
+                # figure = liveloss.draw()
+                # print(figure)
+                # print("saving figure")
+                # # print(figure)
+
+
+
+                # figure_file = os.path.join(loss_plot_path,'train_acur_plot.jpg')
+                # figure.savefig(figure_file)
+
+                print(
+                    '\nRESULTS: epoch {:d} lr {:6f} train loss = {:.3f}, train accuracy : {:.3f} ({:.2f} sec) || '
+                    'valid loss = {:.3f}, valid accuracy : {:.3f} ({:.2f} sec)'
+                    .format(epoch, curr_lr, train_aver_loss, epoch_accur_train, epoch_duration_train, valid_aver_loss,
+                            epoch_accur_valid, epoch_duration_valid))
+
+                if prev_loss > valid_aver_loss:
+                    # if not os.path.isdir(self.checkpoint_dir):
+                    #     os.mkdir(self.checkpoint_dir)
+
+                    # if not os.path.isdir(os.path.join(self.tr_path, self.data_set, self.timestamp)):
+                    #     os.mkdir(os.path.join(self.tr_path, self.data_set, self.timestamp))
+
+                    model_file_path = os.path.join(self.ckpnt_path,
+                                                   self.timestamp + '_split_' + str(split))
+                    if not os.path.exists(model_file_path):
+                        os.makedirs(model_file_path)
+
+                    torch.save(self.network, "{}/model.pth".format(model_file_path))
+
+
+                    # model_file_path = create_ckpt_data_pytorch(self.ckpnt_path, self.network_type, event_time)
+                    # torch.save(self.network, model_file_path)
+                    print('[SESSION SAVE] Epoch {:d}, loss: {:2f}, accur: {:2f}, lr: {:4f}'.format(epoch, valid_aver_loss, epoch_accur_valid, curr_lr))
+                    prev_loss = valid_aver_loss
+                    # ref_counter = 0
+                if curr_lr < prev_lr:
+                    ref_iter_count += 1
+                    if ref_iter_count == self.ref_steps+1:
+                        print('\nEarly stopping\n Saving last best model:')
+                        final_network = torch.load(model_file_path)
+                        # pprint.pprint(final_network.state_dict())
+                        print("Importing model to ONNX")
+                        # model_file_path_onnx = create_ckpt_data_onnx(self.ckpnt_path, self.network_type, event_time)
+
+
+
+                        dummy_input = Variable(torch.randn(1, *[self.img_size[2], self.img_size[0], self.img_size[1]]))
+                        torch_onnx.export(final_network, dummy_input, model_file_path, verbose=False)
+
+                        print('Done')
+                        status = "FINISHED: Early stopping"
+                        return status
+                gc.collect()
+            print("Finalizing training")
+            final_network = torch.load(model_file_path)
+            # pprint.pprint(final_network.state_dict())
+            print("Importing model to ONNX")
+            # model_file_path_onnx = create_ckpt_data_onnx(self.ckpnt_path, self.network_type, event_time)
+            dummy_input = Variable(torch.randn(1, *[self.img_size[2], self.img_size[0], self.img_size[1]]))
+            torch_onnx.export(final_network, dummy_input, model_file_path, verbose=False)
+
+            print('Done')
+            status = 'FINISHED'
+            h5_file.close()
+            return status

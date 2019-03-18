@@ -14,9 +14,10 @@
 
 # --- imports -----------------------------------------------------------------
 
-from utils.metric_v03 import *
+from utils.metric import *
 import numpy as np
-
+import torch.nn as nn
+import torch.optim as optim
 
 class NetworkBase:
     """
@@ -37,7 +38,7 @@ class NetworkBase:
         :param num_classes: number of classes/labels
         :param dropout:     dropout ratio
         """
-        self.loss_f = self._pick_loss_func(loss)
+        self.loss_f = self._pick_loss_func(loss, framework)
         # self.accuracy_f_list = self._pick_accuracy_function(accuracy)
         self.is_training = training
         self.learning_rate = lr
@@ -45,11 +46,11 @@ class NetworkBase:
         self.framework = framework
         self.network_type = network_type
         if optimizer:
-            self.optimizer_f = self._pick_optimizer_func(optimizer)
+            self.optimizer_f = self._pick_optimizer_func(optimizer, framework)
         if nonlin:
-            self.nonlin_f = self._pick_nonlin_func(nonlin)
+            self.nonlin_f = self._pick_nonlin_func(nonlin, framework)
         if upconv:
-            self.upconv_f = self._pick_upconv_func(upconv)
+            self.upconv_f = self._pick_upconv_func(upconv, framework)
         if num_filters:
             self.num_filters = num_filters
         if num_classes:
@@ -65,9 +66,9 @@ class NetworkBase:
             self.trainable_layers = 'all'
 
         if isinstance(accuracy, list):
-            self.accuracy_f_list = [self._pick_accuracy_function(acc) for acc in accuracy]
+            self.accuracy_f_list = [self._pick_accuracy_function(acc, framework) for acc in accuracy]
         else:
-            self.accuracy_f_list = self._pick_accuracy_function(accuracy)
+            self.accuracy_f_list = self._pick_accuracy_function(accuracy, framework)
 
     def _loss_function(self, y_pred, y_true):
         """
@@ -105,128 +106,188 @@ class NetworkBase:
         else:
             raise ValueError('Unexpected network task %s' % net_type)
 
-    def _optimizer_function(self, global_step):
+    def _optimizer_function(self, global_step=None, net_param=None):
         """
         Return the optimizer function
         :param global_step: current global step
         :return:            optimizer
         """
-        if self.trainable_layers == 'all':
-            return self.optimizer_f(self.learning_rate).minimize(self.loss, global_step=global_step)
+        if global_step:
+            if self.trainable_layers == 'all':
+                return self.optimizer_f(self.learning_rate).minimize(self.loss, global_step=global_step)
+            else:
+                first_train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
+                                                     self.trainable_layers)
+                return self.optimizer_f(self.learning_rate).minimize(self.loss, var_list=first_train_vars,
+                                                                     global_step=global_step)
         else:
-            first_train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
-                                                 self.trainable_layers)
-            return self.optimizer_f(self.learning_rate).minimize(self.loss, var_list=first_train_vars,
-                                                                 global_step=global_step)
+            return self.optimizer_f(net_param, self.learning_rate)
 
     @staticmethod
-    def _pick_nonlin_func(key):
+    def _pick_nonlin_func(key, framework):
         """
         Select a nonlinearity/activation function
         :param key: nonliniearity identifier
         :return:    nonliniearity/activation function
         """
-        if key == 'elu':
-            return tf.nn.elu
-        elif key == 'relu':
-            return tf.nn.relu
-        elif key == 'lrelu':
-            return tf.nn.leaky_relu
-        elif key == 'tanh':
-            return tf.nn.tanh
-        else:
-            raise ValueError('Unexpected nonlinearity function %s' % key)
+        if framework == "tensorflow":
+            if key == 'elu':
+                return tf.nn.elu
+            elif key == 'relu':
+                return tf.nn.relu
+            elif key == 'lrelu':
+                return tf.nn.leaky_relu
+            elif key == 'tanh':
+                return tf.nn.tanh
+            else:
+                raise ValueError('Unexpected nonlinearity function %s' % key)
+        elif framework == "pytorch":
+            if key == 'elu':
+                return nn.ELU
+            elif key == 'relu':
+                return nn.ReLU
+            elif key == 'lrelu':
+                return nn.LeakyReLU
+            elif key == 'tanh':
+                return nn.Tanh
+            else:
+                raise ValueError('Unexpected nonlinearity function %s' % key)
 
     @staticmethod
-    def _pick_upconv_func(key):
+    def _pick_upconv_func(key, framework):
         """
         Select either deconvolution or upsampling
         :param key: identifier
         :return:    upconv or upsampling
         """
-        if key == 'upconv':
-            return tf.layers.conv2d_transpose
-        if key == 'upsampling':
+        if framework == "tensorflow":
+            if key == 'upconv':
+                return tf.layers.conv2d_transpose
+            if key == 'upsampling':
 
-            def upconv2d(input_, output_shape, filters, kernel_size=4, strides=(1, 1), name="upconv2d"):
-                """
-                Pure tensorflow 2d upconvolution/upsampling layer using tf.image.resize_images
-                :param input_:
-                :param output_shape:
-                :param filters:
-                :param kernel_size:
-                :param strides:
-                :param name:
-                :return:
-                """
-                with tf.variable_scope(name):
-                    resized = tf.image.resize_images(input_, output_shape[1:3])
-                    upconv = tf.layers.conv2d(resized, filters=filters, kernel_size=kernel_size, strides=strides,
-                                              padding='same', name='conv')
-                    # upconv = tf.nn.conv2d(resize, w, strides=[1, d_h, d_w, 1], padding='SAME')
+                def upconv2d(input_, output_shape, filters, kernel_size=4, strides=(1, 1), name="upconv2d"):
+                    """
+                    Pure tensorflow 2d upconvolution/upsampling layer using tf.image.resize_images
+                    :param input_:
+                    :param output_shape:
+                    :param filters:
+                    :param kernel_size:
+                    :param strides:
+                    :param name:
+                    :return:
+                    """
+                    with tf.variable_scope(name):
+                        resized = tf.image.resize_images(input_, output_shape[1:3])
+                        upconv = tf.layers.conv2d(resized, filters=filters, kernel_size=kernel_size, strides=strides,
+                                                  padding='same', name='conv')
+                        # upconv = tf.nn.conv2d(resize, w, strides=[1, d_h, d_w, 1], padding='SAME')
 
-                    return upconv
+                        return upconv
 
-            return upconv2d
-        else:
-            raise ValueError('Unexpected upconvolution function %s' % key)
+                return upconv2d
+            else:
+                raise ValueError('Unexpected upconvolution function %s' % key)
+        elif framework == "pytorch":
+            if key == 'upconv':
+                return nn.ConvTranspose2d
+            else:
+                raise ValueError('Unexpected upconvolution function %s' % key)
 
     @staticmethod
-    def _pick_loss_func(key):
+    def _pick_loss_func(key, framework):
         """
         Select loss function
         :param key: loss function identifier
         :return:    loss function
         """
-        if key == 'softmax':
-            return softmax
-        if key == 'sigmoid':
-            return sigmoid
-        if key == 'margin':
-            return margin
-        if key == 'mse':
-            return mse
-        if key == 'mse_loss':
-            return mse_loss
-        else:
-            raise ValueError('Unexpected metric function %s' % key)
+        if framework == "tensorflow":
+            if key == 'softmax':
+                return softmax_tf
+            if key == 'sigmoid':
+                return sigmoid_tf
+            if key == 'margin':
+                return margin_tf
+            if key == 'mse':
+                return mse_tf
+            if key == 'mse_loss':
+                return mse_loss_tf
+            else:
+                raise ValueError('Unexpected metric function %s' % key)
+        elif framework == "pytorch":
+            if key == 'softmax':
+                return softmax_pt
+            if key == 'sigmoid':
+                return sigmoid_pt
+            if key == 'margin':
+                return margin_pt
+            if key == 'mse':
+                return mse_pt
+            if key == 'mse_loss':
+                return mse_loss_pt
+            else:
+                raise ValueError('Unexpected metric function %s' % key)
 
     @staticmethod
-    def _pick_accuracy_function(key):
-        if key == 'IoU':
-            return IoU
-        elif key == 'dice_sorensen':
-            return dice_sorensen
-        elif key == 'dice_jaccard':
-            return dice_jaccard
-        elif key == 'mse':
-            return mse
-        elif key == 'hinge':
-            return hinge
-        elif key == 'percent':
-            return percentage
-        else:
-            raise ValueError('Unexpected metric function %s' % key)
+    def _pick_accuracy_function(key, framework):
+        if framework == "tensorflow":
+            if key == 'IoU':
+                return IoU_tf
+            elif key == 'dice_sorensen':
+                return dice_sorensen_tf
+            elif key == 'dice_jaccard':
+                return dice_jaccard_tf
+            elif key == 'mse':
+                return mse_tf
+            elif key == 'hinge':
+                return hinge_tf
+            elif key == 'percent':
+                return percentage_tf
+            else:
+                raise ValueError('Unexpected metric function %s' % key)
+        elif framework == "pytorch":
+            if key == 'IoU':
+                return IoU_pt
+            elif key == 'dice_sorensen':
+                return dice_sorensen_pt
+            elif key == 'dice_jaccard':
+                return dice_jaccard_pt
+            elif key == 'mse':
+                return mse_pt
+            elif key == 'hinge':
+                return hinge_pt
+            elif key == 'percent':
+                return percentage_pt
+            else:
+                raise ValueError('Unexpected metric function %s' % key)
 
 
     @staticmethod
-    def _pick_optimizer_func(key):
-        if key == 'adam':
-            return tf.train.AdamOptimizer
-        if key == 'amsgrad':
-            from network.third_parties.amsgrad.amsgrad import AMSGrad
-            return AMSGrad
-        if key == 'momentum':
-            return tf.train.MomentumOptimizer
-        if key == 'gradient':
-            return tf.train.GradientDescentOptimizer
-        if key == 'proximalgrad':
-            return tf.train.ProximalGradientDescentOptimizer
-        else:
-            raise ValueError('Unexpected optimizer function %s' % key)
+    def _pick_optimizer_func(key, framework):
+        if framework == "tensorflow":
+            if key == 'adam':
+                return tf.train.AdamOptimizer
+            if key == 'amsgrad':
+                from network.third_parties.amsgrad.amsgrad import AMSGrad
+                return AMSGrad
+            if key == 'momentum':
+                return tf.train.MomentumOptimizer
+            if key == 'gradient':
+                return tf.train.GradientDescentOptimizer
+            if key == 'proximalgrad':
+                return tf.train.ProximalGradientDescentOptimizer
+            else:
+                raise ValueError('Unexpected optimizer function %s' % key)
+        elif framework == "pytorch":
+            if key == 'adam':
+                return optim.Adam
+            if key == 'gradient':
+                return optim.SGD
+            else:
+                raise ValueError('Unexpected optimizer function %s' % key)
+
 
     @staticmethod
-    def _conv_bn_layer(input_layer, n_filters, filter_scale=1, filter_size=3, is_training=True, nonlin_f=None,
+    def _conv_bn_layer_tf(input_layer, n_filters, filter_scale=1, filter_size=3, is_training=True, nonlin_f=None,
                        padding='same', name='s_conv_bn', name_postfix='1_1'):
         """
         Convolution layer with batch normalization
@@ -246,13 +307,27 @@ class NetworkBase:
                                     activation=None, padding=padding, kernel_regularizer=tf.contrib.layers.l2_regularizer(scale=0.1),
                                     name='conv_' + name_postfix)
             batch_norm = tf.layers.batch_normalization(conv, training=is_training, fused=False, name='batch_' + name_postfix)
-            if nonlin_f:
                 # weights, biases = NetworkBase.weights_and_biases(tf.shape(batch_norm), tf.shape(batch_norm)[-1])
                 # nonlin = nonlin_f(tf.matmul(batch_norm, weights) + biases, name='activation_' + name_postfix)
-                nonlin = nonlin_f(batch_norm, name='activation_' + name_postfix)
-            else:
-                nonlin = None
+            nonlin = nonlin_f(batch_norm, name='activation_' + name_postfix)
         return conv, batch_norm, nonlin
+
+
+    @staticmethod
+    def _conv_bn_layer_pt(n_in, n_out, filter_size=3, stride=1, is_training=True, nonlin_f=None,
+                       padding='same', name_postfix='1_1'):
+        m = nn.Sequential(
+            nn.Conv2d(n_in, n_out, filter_size, stride),
+            nn.BatchNorm2d(n_out),
+            nonlin_f()
+        )
+        return m
+        # conv = nn.Conv2d(n_filters * filter_scale, input_layer, kernel_size=filter_size, stride=2)
+        # batch_norm = nn.BatchNorm2d(conv)
+        # nonlin = nonlin_f(batch_norm)
+        # return conv, batch_norm, nonlin
+
+
 
     @staticmethod
     def _sep_conv_bn_layer(input_layer, n_filters, filter_scale=1, filter_size=3, is_training=True, nonlin_f=None,
@@ -342,13 +417,13 @@ class NetworkBase:
         """
         return self._loss_function(y_pred=y_pred, y_true=y_true)
 
-    def return_optimizer(self, global_step):
+    def return_optimizer(self, global_step=None, net_param=None):
         """
         Returns the optimizer function
         :param global_step: current global step
         :return:            optimizer
         """
-        return self._optimizer_function(global_step)
+        return self._optimizer_function(global_step, net_param)
 
     def return_nets(self):
         """

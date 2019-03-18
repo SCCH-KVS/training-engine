@@ -92,6 +92,9 @@ class BatchIterator:
         elif self.task_type == 'prediction':
             while self.on_going:
                 yield self._next_batch_prediction()
+        elif self.task_type == 'detection':
+            while self.on_going:
+                yield self._next_batch_detection()
 
 
     # @jit(nopython=True)
@@ -177,6 +180,30 @@ class BatchIterator:
             if num == self.batch_size:
                 break
             yield x, y
+        else:
+            self.on_going = False
+
+    def _next_batch_detection(self):
+        imgs = self.file_name[self.X_key][self.current]
+        pre_lbls = self.file_name[self.y_key][self.current]
+        lbls = [[lst[0:3], lst[4::]]for lst in pre_lbls if sum(lst) != 0]
+        if not list(self.img_size) == imgs[0].shape:
+            imgs = self._resize_data(imgs)
+        if self.augment_dict:
+            imgs = self._augment_data(imgs)
+        yield imgs, lbls
+        for num, item in enumerate(self.iterator, 1):
+            imgs = self.file_name[self.X_key][item]
+            pre_lbls = self.file_name[self.y_key][self.current]
+            lbls = [[lst[0:3], lst[4::]] for lst in pre_lbls if sum(lst) != 0]
+            if not list(self.img_size) == imgs[0].shape:
+                imgs = self._resize_data(imgs)
+            if self.augment_dict:
+                imgs = self._augment_data(imgs)
+            self.current = item
+            if num == self.batch_size:
+                break
+            yield imgs, lbls
         else:
             self.on_going = False
 

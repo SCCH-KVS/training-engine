@@ -20,7 +20,7 @@ import importlib
 from network.TrainRunner import TrainRunner
 from network.InferenceRunner import InferenceRunner
 
-EXPERIMENT_ID = 'ToyNet'
+EXPERIMENT_ID = 'ConvNet'
 
 
 def run(experiment_id):

@@ -15,11 +15,12 @@
 # --- imports -----------------------------------------------------------------
 
 import os
-import cv2
 import time
-import cython
-from scipy.misc import imresize
-# from skimage.transform import resize
+import cv2
+from PIL import Image
+import pycuda.driver as cuda
+import pycuda.autoinit
+from pycuda.compiler import SourceModule
 import numpy as np
 from numba import jit, vectorize, cuda
 
@@ -42,33 +43,52 @@ def one_hot_encode(labels):
         return labels
 
 
-@jit
-def resize_images_gpu(x, img_size):
-    # return cv2.resize(x, (img_size[1], img_size[0]), interpolation=cv2.INTER_LINEAR)
-    if x.shape == img_size:
-        return x
-    else:
-        return imresize(x, (img_size[0], img_size[1]), interp='nearest')
+def one_to_onehot(label, max_label):
+    y = [0 for i in range(max_label)]
+    y[label] = 1
+    return y
 
-@jit
+
+# @jit(parallel=True)
+def resize_images_gpu(x, img_size):
+
+    return cv2.resize(x, (img_size[1], img_size[0]), interpolation=cv2.INTER_LINEAR)
+    # if x.size == img_size[0:2]:
+    #     return x
+    # else:
+    #     return np.rollaxis(np.array(x.resize(img_size[0:2],  Image.ANTIALIAS)), 1, 0)
+
+    # return x
+
+# @jit
 def expand_dims(x, img_size):
     # return np.expand_dims(np.expand_dims(resize_images_gpu(x, img_size), axis=0), axis=-1)
 
     return np.expand_dims(np.expand_dims(x, axis=0), axis=-1)
 
-@jit
+# @jit
 def resize_images_cpu(x, img_size):
     return cv2.resize(x, (img_size[1], img_size[0]), interpolation=cv2.INTER_LINEAR)
 
+# @jit(parallel=True)
+def preprocess_image(img_size, im_file):
 
-@cuda.jit
-def preprocess_image(im_file, img_size):
-    if img_size[2] == 3:
-        img = cv2.imread(im_file, cv2.IMREAD_COLOR)
-    else:
-        img = cv2.imread(im_file, cv2.IMREAD_GRAYSCALE)
-    image = resize_images_gpu(img, img_size)
+    img = cv2.imread(im_file, 0)
+    image = cv2.resize(img, (img_size[1], img_size[0]), interpolation=cv2.INTER_LINEAR)
+    # img = Image.open(im_file)
+    # img = np.rollaxis(Image.open(im_file), 1, 0)
+    # image = resize_images_gpu(img_size,img)
     return image
+
+
+# @jit(parallel=True)
+def bulk_process(img_size, im):
+    # img_out = []
+    # for im in im_list:
+    #     img_out.append(np.expand_dims(preprocess_image(im, img_size), axis=-1))
+    # return img_out
+    return preprocess_image(img_size, im)
+
 
 def path_walk(path):
     path_list = []
@@ -103,9 +123,21 @@ def log_loss_accuracy(accuracy, accuracy_type, task_type, num_classes, multi_tas
     return acc_str
 
 
-# def create_ckpt_data(file_path):
-#     if not os.path.exists(file_path):
-#         # create directory
-#         os.makedirs(file_path)
-#
-#     return "{}/model.ckpt".format(file_path)
+# @jit(parallel=True)
+def count_size(file):
+    return os.stat(file).st_size
+
+
+@jit
+def chunk_split(data_list, splits):
+    avg = len(data_list) / float(splits)
+    out = []
+    last = 0.0
+
+    while last < len(data_list):
+        out.append(data_list[int(last):int(last + avg)])
+        last += avg
+
+    return out
+
+

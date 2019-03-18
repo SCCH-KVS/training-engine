@@ -14,10 +14,13 @@
 
 # --- imports -----------------------------------------------------------------
 
+import gc
 import ast
 import json
 import h5py
-import numpy as np
+import multiprocessing as mp
+from functools import partial
+from psutil import virtual_memory
 from sklearn.model_selection import train_test_split
 import time
 from utils.utils import *
@@ -71,8 +74,29 @@ class DataParser:
     def get_tr_path(self):
         return self.tr_path
 
+
+    def _path_preparation(self):
+        if self.experiment_path is None:
+            self.experiment_path = os.path.join(os.path.dirname(os.path.abspath('utils')), "experiments")
+        if not os.path.exists(self.experiment_path):
+            os.makedirs(self.experiment_path)
+        self.data_path = os.path.join(self.experiment_path, "datasets", self.data_set)
+        if not os.path.exists(self.data_path):
+            os.makedirs(self.data_path)
+        self.info_path = os.path.join(self.experiment_path, "info_logs", self.data_set)
+        if not os.path.exists(self.info_path):
+            os.makedirs(self.info_path)
+        self.tr_path = os.path.join(self.experiment_path, "train_logs", self.data_set, self.timestamp)
+        if not os.path.exists(self.tr_path):
+            os.makedirs(self.tr_path)
+        self.ckpnt_path = os.path.join(self.experiment_path, "ckpnt_logs", self.data_set, self.timestamp)
+        if not os.path.exists(self.ckpnt_path):
+            os.makedirs(self.ckpnt_path)
+
+
+
+
     def _parse_data(self):
-        self._path_preparation()
 
         file_name = self.data_set
         if self.img_size:
@@ -83,20 +107,10 @@ class DataParser:
             file_name += '_cent'
         file_name += '.hdf5'
 
-        if not os.path.exists(os.path.join(self.data_path, self.data_set)):
-            os.makedirs(os.path.join(self.data_path, self.data_set))
+        self._path_preparation()
 
-        if not os.path.exists(os.path.join(self.info_path, self.data_set)):
-            os.makedirs(os.path.join(self.info_path, self.data_set))
-
-        if not os.path.exists(os.path.join(self.tr_path, self.data_set)):
-            os.makedirs(os.path.join(self.tr_path, self.data_set))
-
-        if not os.path.exists(os.path.join(self.ckpnt_path, self.data_set)):
-            os.makedirs(os.path.join(self.ckpnt_path, self.data_set))
-
-        h5py_file_name = os.path.join(self.data_path, self.data_set, file_name)
-        log_file_name = os.path.join(self.info_path, self.data_set, self.timestamp + ".json")
+        h5py_file_name = os.path.join(self.data_path, file_name)
+        log_file_name = os.path.join(self.info_path, self.timestamp + ".json")
 
 
         if self.data_set is "MNIST":
@@ -116,9 +130,9 @@ class DataParser:
                 raise ValueError('No data presented')
 
     def _data_file_parse(self, h5py_file_name, log_file_name):
-        if os.path.splitext(self.data_file)[1] is '.txt':
+        if os.path.splitext(self.data_file)[1] == '.txt':
             x_list, y_list = self._process_txt()
-        elif os.path.splitext(self.data_file)[1] is '.json':
+        elif os.path.splitext(self.data_file)[1] == '.json':
             x_list, y_list = self._process_json()
         else:
             raise ValueError('Data format is not supported. Check documentation for data type support.')
@@ -128,7 +142,7 @@ class DataParser:
                 try:
                     self.slice_split = self._cross_val_split(len(x_list))
                     self.data_size = len(x_list)
-                    self._dump_h5py(h5py_file_name, x_list, one_hot_encode(y_list))
+                    self._dump_h5py(h5py_file_name, x_list, y_list)
                     self._dump_json_logs(h5py_file_name, log_file_name)
                     self.dict_data_path = h5py_file_name
                     self.log_info_path = log_file_name
@@ -159,25 +173,25 @@ class DataParser:
                     y_data_ = []
         else:
             if self.task_key is "classification":
-                if (os.path.splitext(line.split()[0])[1].lower() in ['.jpg', '.jpeg', '.png']) and isinstance(ast.literal_eval(line.rstrip().split()[1]), int):
+                if (os.path.splitext(line.split()[0])[1].lower() in ['.jpg', '.jpeg', '.png', '.bmp']) and line.rstrip().split()[1].isdigit():
                     print("Classificaiton data detected. Integer encoded")
                     X_data_ = [line.rstrip().split()[0] for line in file_lines]
                     y_data_ = [int(line.rstrip().split()[1]) for line in file_lines]
-                elif (os.path.splitext(line.split()[0])[1].lower() in ['.jpg', '.jpeg', '.png']) and isinstance(ast.literal_eval(''.join(line.rstrip().split()[1:])), list) and (sum(ast.literal_eval(''.join(line.rstrip().split()[1:]))) == 1):
+                elif (os.path.splitext(line.split()[0])[1].lower() in ['.jpg', '.jpeg', '.png', '.bmp']) and isinstance(ast.literal_eval(''.join(line.rstrip().split()[1:])), list) and (sum(ast.literal_eval(''.join(line.rstrip().split()[1:]))) == 1):
                     print("Classificaiton data detected. One hot encoded")
                     X_data_ = [line.rstrip().split()[0] for line in file_lines]
                     y_data_ = [ast.literal_eval(''.join(line.rstrip().split()[1:])) for line in file_lines]
                 else:
                     raise ValueError("Incorrect data representation")
             elif (self.task_key is "segmentation") or (self.task_key is "gan"):
-                if (os.path.splitext(line.split()[0])[1].lower() in ['.jpg', '.jpeg', '.png']) and (
-                        os.path.splitext(line.rstrip().split()[1])[1].lower() in ['.jpg', '.jpeg', '.png']):
+                if (os.path.splitext(line.split()[0])[1].lower() in ['.jpg', '.jpeg', '.png', '.bmp']) and (
+                        os.path.splitext(line.rstrip().split()[1])[1].lower() in ['.jpg', '.jpeg', '.png', '.bmp']):
                     X_data_ = [line.rstrip().split()[0] for line in file_lines]
                     y_data_ = [line.rstrip().split()[1] for line in file_lines]
                 else:
                     raise ValueError("Incorrect data representation")
             elif self.task_key is "detection":
-                if (os.path.splitext(line.split()[0])[1].lower() in ['.jpg', '.jpeg', '.png']) and isinstance(ast.literal_eval(''.join(line.rstrip().split()[1:])), list):
+                if (os.path.splitext(line.split()[0])[1].lower() in ['.jpg', '.jpeg', '.png', '.bmp']) and isinstance(ast.literal_eval(''.join(line.rstrip().split()[1:])), list):
                     X_data_ = [line.rstrip().split()[0] for line in file_lines]
                     y_data_ = [ast.literal_eval(''.join(line.rstrip().split()[1:])) for line in file_lines]
                 else:
@@ -191,22 +205,39 @@ class DataParser:
         with open(self.data_file, 'r') as f:
             file_lines = json.load(f)
 
-        if file_lines['source_path'] is [None, 'null', '']:
+        if file_lines['source_path'] in [None, 'null', '']:
             raise ValueError("Source path is not specified")
         else:
-            if file_lines['mask_path'] is [None, 'null', '']:
-                if self.task_key is "classification":
-                    X_data_ = [d['frame'] for d in file_lines['meta']]
-                    y_data_ = [o['object_class'] for d in file_lines['meta'] for o in d['frame']]
-                elif self.task_key is "detection":
-                    X_data_ = [d['frame'] for d in file_lines['meta']]
-                    y_data_ = [o['bb'] for d in file_lines['meta'] for o in d['frame']]
+            if file_lines['mask_path'] in [None, 'null', '']:
+                if self.task_key == "classification":
+                    X_data_ = [os.path.join(file_lines['source_path'], d['frame']) for d in file_lines['meta']]
+                    y_data_ = [o['object_class'] for d in file_lines['meta'] for o in d['objects']]
+                elif self.task_key == "tracking":
+                    X_data_ = [os.path.join(file_lines['source_path'], d['frame']) for d in file_lines['meta']]
+                    y_data_ = [o['bb'] for d in file_lines['meta'] for o in d['objects']]
+                elif self.task_key == "detection":
+                    X_data_ = [os.path.join(file_lines['source_path'], d['frame']) for d in file_lines['meta']]
+                    y_list = []
+                    for d in file_lines['meta']:
+                        lst = []
+                        for o in d['objects']:
+                            lst.append([o['bb'] + one_to_onehot(o['object_class'], self.num_classes)])
+                        y_list.append(lst)
+
+                    ll = max([len(l) for l in y_list])
+                    y_data_ = []
+                    for l in y_list:
+                        m = l
+                        for i in range(ll - len(m)):
+                            m.append([[0, 0, 0, 0] + [0 for k in range(10)]])
+                        y_data_.append(m)
+                    y_data_ = np.array(y_data_)
                 else:
                     raise ValueError('Such task not supported')
             else:
-                if (self.task_key is "segmentation") or (self.task_key is "gan"):
-                    X_data_ = [d['frame'] for d in file_lines['meta']]
-                    y_data_ = [d['mask'] for d in file_lines['meta']]
+                if (self.task_key == "segmentation") or (self.task_key == "gan"):
+                    X_data_ = [os.path.join(file_lines['source_path'], d['frame']) for d in file_lines['meta']]
+                    y_data_ = [os.path.join(file_lines['mask_path'], d['mask']) for d in file_lines['meta']]
                 else:
                     raise ValueError('Such task not supported')
 
@@ -228,9 +259,11 @@ class DataParser:
                 for i in range(len(path_list)):
                     for dirpath, _, filenames in os.walk(path_list[i]):
                         for f in filenames:
-                            if f.lower().endswith(tuple(['.jpg', '.jpeg', '.png'])):
+                            if f.lower().endswith(tuple(['.jpg', '.jpeg', '.png', '.bmp'])):
                                 x_list.append(os.path.abspath(os.path.join(dirpath, f)))
                                 y_list.append(i)
+                            else:
+                                raise ValueError("Not supported data format")
             elif self.task_key is "segmentation":
                 if "images" in path_list and "masks" in path_list:
                     x_list = path_walk(os.path.join(self.data_folder, 'images'))
@@ -252,7 +285,7 @@ class DataParser:
                 try:
                     self.slice_split = self._cross_val_split(len(x_list))
                     self.data_size = len(x_list)
-                    self._dump_h5py(h5py_file_name, x_list, one_hot_encode(y_list))
+                    self._dump_h5py(h5py_file_name, x_list, y_list)
                     self._dump_json_logs(h5py_file_name, log_file_name)
                     self.dict_data_path = h5py_file_name
                     self.log_info_path = log_file_name
@@ -273,7 +306,7 @@ class DataParser:
     def _load_mnist(self, h5py_file_name, log_file_name):
 
         print('Creating h5py file for MNIST')
-        if self.framework is 'tensorflow':
+        if self.framework == 'tensorflow':
             import tensorflow as tf
             mnist = tf.keras.datasets.mnist
             if self.is_training:
@@ -281,25 +314,25 @@ class DataParser:
             else:
                 _, (self.X_data, self.y_data) = mnist.load_data()
             # y_data = one_hot_encode(y_data)
-        elif self.framework is 'pytorch':
+        elif self.framework == 'pytorch':
             import torchvision.datasets as datasets
-            mnist_trainset = datasets.MNIST(root=os.path.join(self.info_path, self.data_set), train=True, download=True, transform=None)
+            mnist_trainset = datasets.MNIST(root=os.path.join(self.data_path, self.data_set), train=True, download=True, transform=None)
             import struct
             if self.is_training:
-                with open(os.path.join(self.info_path, self.data_set + r'/raw/train-labels-idx1-ubyte'), 'rb') as lbpath:
+                with open(os.path.join(self.data_path, self.data_set + r'/raw/train-labels-idx1-ubyte'), 'rb') as lbpath:
                     magic, n = struct.unpack('>II', lbpath.read(8))
                     y_data = np.fromfile(lbpath, dtype=np.uint8).tolist()
 
-                with open(os.path.join(self.info_path, self.data_set + r'/raw/train-images-idx3-ubyte'), 'rb') as imgpath:
+                with open(os.path.join(self.data_path, self.data_set + r'/raw/train-images-idx3-ubyte'), 'rb') as imgpath:
                     magic, num, rows, cols = struct.unpack(">IIII", imgpath.read(16))
                     X_data = np.fromfile(imgpath, dtype=np.uint8).reshape((-1, 28, 28, 1))
             else:
-                with open(os.path.join(self.info_path, self.data_set + r'/raw/test-labels-idx1-ubyte'),
+                with open(os.path.join(self.data_path, self.data_set + r'/raw/test-labels-idx1-ubyte'),
                           'rb') as lbpath:
                     magic, n = struct.unpack('>II', lbpath.read(8))
                     self.y_data = np.fromfile(lbpath, dtype=np.uint8).tolist()
 
-                with open(os.path.join(self.info_path, self.data_set + r'/raw/test-images-idx3-ubyte'),
+                with open(os.path.join(self.data_path, self.data_set + r'/raw/test-images-idx3-ubyte'),
                           'rb') as imgpath:
                     magic, num, rows, cols = struct.unpack(">IIII", imgpath.read(16))
                     self.X_data = np.fromfile(imgpath, dtype=np.uint8).reshape((-1, 28, 28, 1))
@@ -313,7 +346,6 @@ class DataParser:
                 try:
                     self.data_size = len(X_data)
                     self.slice_split = self._cross_val_split(len(y_data))
-                    # self._dump_h5py(h5py_file_name, X_data, one_hot_encode(y_data))
                     with h5py.File(h5py_file_name, 'a') as f:
                         f.create_dataset('X_data', data=X_data)
                         f.create_dataset('y_data', data=one_hot_encode(y_data))
@@ -344,13 +376,19 @@ class DataParser:
         elif self.framework is "pytorch":
             import torchvision.datasets as datasets
             if self.is_training:
-                cifar_trainset = datasets.CIFAR10(root=os.path.join(self.info_path, self.data_set), train=True, download=True, transform=None)
-                X_data = cifar_trainset.train_data
-                y_data = cifar_trainset.train_labels
+                cifar_trainset = datasets.CIFAR10(root=os.path.join(self.data_path, self.data_set), train=True, download=True, transform=None)
+                # works ONLY for Windows. I have NO idea why
+                # X_data = cifar_trainset.train_data
+                # y_data = cifar_trainset.train_labels
+                y_data = [x for _, x in cifar_trainset]
+                [np.asarray(x) for x, _ in cifar_trainset]
+
             else:
-                cifar_trainset = datasets.CIFAR10(root=os.path.join(self.info_path, self.data_set), train=False, download=True, transform=None)
-                self.X_data = cifar_trainset.test_data
-                self.y_data = cifar_trainset.test_labels
+                cifar_trainset = datasets.CIFAR10(root=os.path.join(self.data_path, self.data_set), train=False, download=True, transform=None)
+                # self.X_data = cifar_trainset.test_data
+                # self.y_data = cifar_trainset.test_labels
+                self.X_data = [np.asarray(x) for x, _ in cifar_trainset]
+                self.y_data = [x for _, x in cifar_trainset]
 
         else:
             raise ValueError('Framework does not exist')
@@ -361,7 +399,9 @@ class DataParser:
                 try:
                     self.data_size = len(X_data)
                     self.slice_split = self._cross_val_split(len(y_data))
-                    self._dump_h5py(h5py_file_name, X_data, one_hot_encode(y_data))
+                    with h5py.File(h5py_file_name, 'a') as f:
+                        f.create_dataset('X_data', data=X_data)
+                        f.create_dataset('y_data', data=one_hot_encode(y_data))
                     self._dump_json_logs(h5py_file_name, log_file_name)
                     self.dict_data_path = h5py_file_name
                     self.log_info_path = log_file_name
@@ -391,13 +431,17 @@ class DataParser:
             elif self.framework is "pytorch":
                 import torchvision.datasets as datasets
                 if self.is_training:
-                    cifar_trainset = datasets.CIFAR100(root=os.path.join(self.info_path, self.data_set), train=True, download=True, transform=None)
-                    X_data = cifar_trainset.train_data
-                    y_data = cifar_trainset.train_labels
+                    cifar_trainset = datasets.CIFAR100(root=os.path.join(self.data_path, self.data_set), train=True, download=True, transform=None)
+                    y_data = [x for _, x in cifar_trainset]
+                    [np.asarray(x) for x, _ in cifar_trainset]
+                    # X_data = cifar_trainset.train_data
+                    # y_data = cifar_trainset.train_labels
                 else:
-                    cifar_trainset = datasets.CIFAR100(root=os.path.join(self.info_path, self.data_set), train=True, download=True, transform=None)
-                    self.X_data = cifar_trainset.test_data
-                    self.y_data = cifar_trainset.test_labels
+                    cifar_trainset = datasets.CIFAR100(root=os.path.join(self.data_path, self.data_set), train=True, download=True, transform=None)
+                    # self.X_data = cifar_trainset.test_data
+                    # self.y_data = cifar_trainset.test_labels
+                    self.X_data = [np.asarray(x) for x, _ in cifar_trainset]
+                    self.y_data = [x for _, x in cifar_trainset]
 
             else:
                 raise ValueError('Framework does not exist')
@@ -407,7 +451,9 @@ class DataParser:
                 try:
                     self.data_size = len(X_data)
                     self.slice_split = self._cross_val_split(len(y_data))
-                    self._dump_h5py(h5py_file_name, X_data, one_hot_encode(y_data))
+                    with h5py.File(h5py_file_name, 'a') as f:
+                        f.create_dataset('X_data', data=X_data)
+                        f.create_dataset('y_data', data=one_hot_encode(y_data))
                     self._dump_json_logs(h5py_file_name, log_file_name)
                     self.dict_data_path = h5py_file_name
                     self.log_info_path = log_file_name
@@ -443,41 +489,83 @@ class DataParser:
             raise ValueError("Unable to save logs")
 
     def _dump_h5py(self, h5py_file_name, x_list, y_list):
+        mem = virtual_memory()
+        free_mem = int(mem.free * 0.7)
         if (self.task_key is 'segmentation') or (self.task_key is 'gan'):
+            pool = mp.Pool(mp.cpu_count())
+            data_mem_x = sum(pool.map(count_size, x_list))
+            pool.close()
+            pool.join()
+            pool = mp.Pool(mp.cpu_count())
+            data_mem_y = sum(pool.map(count_size, y_list))
+            pool.close()
+            pool.join()
+
+
+            x_list_split = chunk_split(x_list, data_mem_x//free_mem + 1)
+            y_list_split = chunk_split(y_list, data_mem_y//free_mem + 1)
+
             with h5py.File(h5py_file_name, 'a') as f:
-                dset_x = f.create_dataset('X_data', (1, self.img_size[0], self.img_size[1], self.img_size[2]),
+                dset_x = f.create_dataset('X_data', (0, self.img_size[0], self.img_size[1], self.img_size[2]),
                                           maxshape=(None, self.img_size[0], self.img_size[1], self.img_size[2]),
                                           chunks=True)
-                dset_y = f.create_dataset('y_data', (1, self.img_size[0], self.img_size[1], self.num_classes),
-                                          maxshape=(None, self.img_size[0], self.img_size[1], self.num_classes),
+                dset_y = f.create_dataset('y_data', (0, self.img_size[0], self.img_size[1], self.img_size[2]),
+                                          maxshape=(None, self.img_size[0], self.img_size[1], self.img_size[2]),
                                           chunks=True)
-                if isinstance(x_list[0], str):
-                    for i in range(0, len(x_list)):
-                        dset_x.resize(dset_x.shape[0] + 1, axis=0)
-                        dset_x[-dset_x.shape[0]:] = expand_dims(x_list[i], self.img_size)
-                        dset_y.resize(dset_y.shape[0] + 1, axis=0)
-                        dset_y[-dset_y.shape[0]:] = expand_dims(y_list[i], self.img_size)
-                else:
-                    for i in range(0, len(x_list)):
-                        dset_x.resize(dset_x.shape[0] + 1, axis=0)
-                        dset_x[-dset_x.shape[0]:] = expand_dims(x_list[i], self.img_size)
-                        dset_y.resize(dset_y.shape[0] + 1, axis=0)
-                        dset_y[-dset_y.shape[0]:] = expand_dims(y_list[i], self.img_size)
+                for i in range(len(x_list_split)):
+                    temp_map = np.zeros([len(x_list_split), self.img_size[0], self.img_size[1], self.img_size[2]])
+                    pool = mp.Pool(mp.cpu_count())
+                    func = partial(bulk_process, self.img_size)
+                    temp_map = np.expand_dims(np.array(pool.map(func, x_list_split[i])), -1)
+                    dset_x.resize(dset_x.shape[0] + len(x_list_split[i]), axis=0)
+                    dset_x[-len(x_list_split[i]):] = temp_map
+                    pool.close()
+                    pool.join()
+                for i in range(len(y_list_split)):
+                    temp_map = np.zeros([len(x_list_split), self.img_size[0], self.img_size[1], self.img_size[2]])
+                    pool = mp.Pool(mp.cpu_count())
+                    func = partial(bulk_process, self.img_size)
+                    temp_map = np.expand_dims(np.array(pool.map(func, x_list_split[i])), -1)
+                    dset_y.resize(dset_y.shape[0] + len(y_list_split[i]), axis=0)
+                    dset_y[-len(y_list_split[i]):] = temp_map
+                    pool.close()
+                    pool.join()
+
         else:
+            start_process = time.time()
             with h5py.File(h5py_file_name, 'a') as f:
-                dset_x = f.create_dataset('X_data', (1, self.img_size[0], self.img_size[1], self.img_size[2]),
+                pool = mp.Pool(mp.cpu_count())
+                start_time = time.time()
+                data_mem_x = sum(pool.map(count_size, x_list))
+                pool.close()
+                pool.join()
+                elapsed_time = time.time() - start_time
+                print("Data size count finished in")
+                print(time.strftime("%H:%M:%S", time.gmtime(elapsed_time)))
+                x_list_split = chunk_split(x_list, data_mem_x // free_mem + 1)
+
+                print("chunk split finished")
+                dset_x = f.create_dataset('X_data', (0, self.img_size[0], self.img_size[1], self.img_size[2]),
                                           maxshape=(None, self.img_size[0], self.img_size[1], self.img_size[2]),
-                                          chunks=True)
-                if isinstance(x_list[0], str):
-                    for i in range(0, len(x_list)):
-                        dset_x.resize(dset_x.shape[0] + 1, axis=0)
-                        dset_x[-dset_x.shape[0]:] = expand_dims(x_list[i], self.img_size)
-                    f.create_dataset('y_data', data=y_list)
-                else:
-                    for i in range(0, len(x_list)):
-                        dset_x.resize(dset_x.shape[0] + 1, axis=0)
-                        dset_x[-dset_x.shape[0]:] = expand_dims(x_list[i], self.img_size)
-                    f.create_dataset('y_data', data=y_list)
+                                          chunks=True, compression='gzip')
+                for i in range(len(x_list_split)):
+                    temp_map = np.zeros([len(x_list_split), self.img_size[0], self.img_size[1], self.img_size[2]])
+                    print("Start data process loop " + str(i))
+                    start_time = time.time()
+                    pool = mp.Pool(mp.cpu_count())
+                    func = partial(bulk_process, self.img_size)
+                    temp_map = np.expand_dims(np.array(pool.map(func, x_list_split[i])),-1)
+                    dset_x.resize(dset_x.shape[0] + len(x_list_split[i]), axis=0)
+                    dset_x[-len(x_list_split[i]):] = temp_map
+                    pool.close()
+                    pool.join()
+                    elapsed_time = time.time() - start_time
+                    print(time.strftime("%H:%M:%S", time.gmtime(elapsed_time)))
+
+                f.create_dataset('y_data', data=y_list)
+            end_process = time.time() - start_process
+            print('full time process: ' + time.strftime("%H:%M:%S", time.gmtime(end_process)))
+        gc.collect()
 
     def _check_data_split(self):
         """
@@ -508,24 +596,6 @@ class DataParser:
             slices = [ind_train, ind_val]
 
         return slices
-
-    def _path_preparation(self):
-        if self.experiment_path is None:
-            self.experiment_path = os.path.join(os.path.dirname(os.path.abspath('utils')), "experiments")
-        if not os.path.isdir(self.experiment_path):
-            os.mkdir(self.experiment_path)
-        self.data_path = os.path.join(self.experiment_path, "datasets")
-        if not os.path.isdir(self.data_path):
-            os.mkdir(self.data_path)
-        self.info_path = os.path.join(self.experiment_path, "info_logs")
-        if not os.path.isdir(self.info_path):
-            os.mkdir(self.info_path)
-        self.tr_path = os.path.join(self.experiment_path, "train_logs")
-        if not os.path.isdir(self.tr_path):
-            os.mkdir(self.tr_path)
-        self.ckpnt_path = os.path.join(self.experiment_path, "ckpnt_logs")
-        if not os.path.isdir(self.ckpnt_path):
-            os.mkdir(self.ckpnt_path)
 
 
     @staticmethod
