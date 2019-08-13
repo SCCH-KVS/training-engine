@@ -259,12 +259,13 @@ class BatchIterator:
         # only if segmentation colors are encoded as class labels or binary
         if ((len(msks.shape) == 3) and (np.array_equal(msks[:, :, 0], msks[:, :, 1]))) or (len(msks.shape) != 3):
             new_img = np.zeros([msks.shape[0], msks.shape[1], self.num_lbls])
-            img = msks[:, :, 0]
+            img = msks
             # binary segmentation - known bag: binary segmentation only
-            if self.num_lbls == 2:
+            if self.num_lbls == 1:
                 img = img//255
-                new_img[:, :, 0] = img
-                new_img[:, :, 1] = 1 - img
+                new_img = img
+                # new_img[:, :, 0] = img
+                # new_img[:, :, 1] = 1 - img
             else:
                 for j in range(0, self.num_lbls):
                     x_ind, y_ind = np.where(img == j)

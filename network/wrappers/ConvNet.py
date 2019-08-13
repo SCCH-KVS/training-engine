@@ -101,21 +101,22 @@ class ConvNet_pt(NetworkBase, nn.Module):
         nn.Module.__init__(self)
 
         self.conv_1_1 = self._conv_bn_layer_pt(1, self.num_filters, filter_size=5, stride=1, is_training=True,
-                                               nonlin_f=self.nonlin_f, padding='same', name_postfix='1_1')
+                                               nonlin_f=self.nonlin_f, padding=1, name_postfix='1_1')
+
         self.pool_1 = nn.MaxPool2d(kernel_size=2, stride=2)
         self.drop_1 = nn.Dropout2d(p=self.dropout)
 
-        self.conv_2_1 = self._conv_bn_layer_pt(self.num_filters, self.num_filters*2, filter_size=5, stride=1, is_training=True,
-                                               nonlin_f=self.nonlin_f, padding='same', name_postfix='1_1')
+        self.conv_2_1 = self._conv_bn_layer_pt(self.num_filters, self.num_filters * 2, filter_size=5, stride=1,
+                                               is_training=True,
+                                               nonlin_f=self.nonlin_f, padding=1, name_postfix='1_1')
         self.pool_2 = nn.MaxPool2d(kernel_size=2, stride=2)
         self.drop_2 = nn.Dropout2d(p=self.dropout)
-
 
         # self.fc_1 = nn.Linear(1024, 512)
         # self.drop_4 = nn.Dropout2d(p=self.dropout)
 
-        self.fc_2 = nn.Linear(512, 128)
-        self.drop_5 = nn.Dropout2d(p=self.dropout)
+        self.fc_2 = nn.Linear(800, 128)
+        self.drop_5 = nn.Dropout(p=self.dropout)
 
         self.out = nn.Linear(128, self.num_classes)
 

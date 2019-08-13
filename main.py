@@ -22,7 +22,6 @@ from network.InferenceRunner import InferenceRunner
 
 EXPERIMENT_ID = 'ConvNet'
 
-
 def run(experiment_id):
     config = importlib.import_module('configs.config_' + experiment_id)
     args = config.load_config()
@@ -32,7 +31,7 @@ def run(experiment_id):
     else:
         inference = InferenceRunner(experiment_id=experiment_id)
         inference.start_inference()
-        raise ValueError('Inference not implemented yet')
+        # raise ValueError('Inference not implemented yet')
 
 
 if __name__ == '__main__':

@@ -19,6 +19,7 @@ import os
 import time
 import h5py
 import json
+import tf2onnx
 import numpy as np
 import tensorflow as tf
 from tqdm import tqdm
@@ -46,19 +47,22 @@ class TrainRunner(NetRunner):
         Start Neural Network training
         :return:
         """
-        # os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
         # training initialisation
         # with tf.device('/cpu:0'):
         # self._initialize_data()
-        self._initialize_training()
+        validation_scores = self._initialize_training()
+        return validation_scores
 
     def _initialize_training(self):
         if self.framework == 'tensorflow':
+            os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
             self.build_tensorflow_pipeline()
-            self._run_tensorflow_pipeline()
+            valid_loss_final = self._run_tensorflow_pipeline()
+            return valid_loss_final
         elif self.framework == 'pytorch':
             self.build_pytorch_pipeline()
-            self._run_pytorch_pipeline()
+            valid_loss_final =self._run_pytorch_pipeline()
+            return valid_loss_final
         else:
             raise ValueError('Framework is not supported')
 
@@ -67,11 +71,7 @@ class TrainRunner(NetRunner):
 
         if self.gpu_load != 0:
             gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=self.gpu_load)
-            # config = tf.ConfigProto(gpu_options=gpu_options, log_device_placement=True,
-            #                         device_count={"CPU": 4},
-            #                         inter_op_parallelism_threads=4,
-            #                         intra_op_parallelism_threads=5,)
-            config = tf.ConfigProto(gpu_options=gpu_options, log_device_placement=True)
+            config = tf.ConfigProto(gpu_options=gpu_options, log_device_placement=False)
             config.gpu_options.allow_growth = True
         else:
             os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
@@ -153,7 +153,7 @@ class TrainRunner(NetRunner):
                         epoch_duration_valid = 0
 
                     # step_cout_train = 1
-                    for i in tqdm(train_generator, total=train_lim, unit=' steps', desc='Epoch {:d} train'.format(epoch)):
+                    for i in tqdm(train_generator, total=train_lim, unit=' steps', desc='Epoch {:d} train'.format(epoch), disable=True):
                         with tf.device('/cpu:0'):
                             total_recall_counter_train += 1
                             start_time = time.time()
@@ -198,7 +198,7 @@ class TrainRunner(NetRunner):
                         # step_cout_train += 1
 
                     # step_cout_valid = 1
-                    for i in tqdm(valid_generator, total=valid_lim, unit=' steps', desc='Epoch {:d} valid'.format(epoch)):
+                    for i in tqdm(valid_generator, total=valid_lim, unit=' steps', desc='Epoch {:d} valid'.format(epoch), disable=True):
                         with tf.device('/cpu:0'):
                             total_recall_counter_valid += 1
 
@@ -291,6 +291,14 @@ class TrainRunner(NetRunner):
                                 os.makedirs(model_file_path)
 
                             saver.save(sess, "{}/model.ckpt".format(model_file_path), global_step=epoch)
+                            # tf.train.write_graph(sess.graph.as_graph_def(), model_file_path, 'tensorflowModel.pbtxt',
+                            #                      as_text=True)
+                            #
+                            # onnx_graph = tf2onnx.tfonnx.process_tf_graph(sess.graph, input_names=["Input_train:0"],
+                            #                                              output_names=["output:0"])
+                            # model_proto = onnx_graph.make_model("test")
+                            # with open("{}/model.onnx".format(model_file_path), "wb") as f:
+                            #     f.write(model_proto.SerializeToString())
 
                             # onnx_graph = tf2onnx.tfonnx.process_tf_graph(sess.graph, output_names=["output:0"])
                             # model_proto = onnx_graph.make_model("test")
@@ -312,8 +320,22 @@ class TrainRunner(NetRunner):
                                 ref_iter_count += 1
                                 if ref_iter_count == self.ref_steps:
                                     print('\nEarly stopping')
+                                    model_file_path = os.path.join(self.ckpnt_path,
+                                                                   self.timestamp + '_split_' + str(split))
+                                    if not os.path.exists(model_file_path):
+                                        os.makedirs(model_file_path)
+
+                                    saver.save(sess, "{}/model.ckpt".format(model_file_path), global_step=epoch)
+
+                                    # onnx_graph = tf2onnx.tfonnx.process_tf_graph(sess.graph,
+                                    #                                              input_names=["Input_train:0"],
+                                    #                                              output_names=["output:0"])
+                                    # model_proto = onnx_graph.make_model("test")
+                                    # with open("{}/model.onnx".format(model_file_path), "wb") as f:
+                                    #     f.write(model_proto.SerializeToString())
                                     # sess.close()
-                                    break
+                                    return prev_loss
+                                    # break
                     gc.collect()
             coord.request_stop()
             coord.join(enqueue_threads)
@@ -379,8 +401,8 @@ class TrainRunner(NetRunner):
                 epoch_duration_train = 0
                 epoch_duration_valid = 0
 
-                print("image dimentions")
-                print([self.img_size[0], self.img_size[1], self.img_size[2]])
+                # print("image dimentions")
+                # print([self.img_size[0], self.img_size[1], self.img_size[2]])
 
                 for i in tqdm(train_generator, total=train_lim, unit=' steps', desc='Epoch {:d} train'.format(epoch)):
                     total_recall_counter_train += 1
@@ -388,14 +410,14 @@ class TrainRunner(NetRunner):
                     ff = list(i)
 
                     outputs = self.network(torch.from_numpy(np.array([np.reshape(f[0], [self.img_size[0], self.img_size[1], self.img_size[2]]) for f
-                                            in ff]).transpose((0,3,1,2))).float())
-                    loss = self.network.return_loss(outputs, torch.from_numpy(np.array([f[1] for f in ff])).long())
+                                            in ff]).transpose((0,3,1,2))).float().to(self.device))
+                    loss = self.network.return_loss(outputs, torch.from_numpy(np.array([f[1] for f in ff])).long().to(self.device)).to(self.device)
                     self.train_op.zero_grad()
                     loss.backward()
                     self.train_op.step()
 
-                    train_step_accuracy = int(self.network.return_accuracy(outputs, torch.from_numpy(np.array([f[1] for f in ff])),  self.batch_size,
-                                                self.task_type))
+                    train_step_accuracy = int(self.network.return_accuracy(outputs, torch.from_numpy(np.array([f[1] for f in ff])).to(self.device),  self.batch_size,
+                                                self.task_type).to(self.device))
 
                     epoch_loss_train += loss.item()
                     epoch_accur_train += (100*train_step_accuracy)/self.batch_size
@@ -406,11 +428,11 @@ class TrainRunner(NetRunner):
                     ff = list(i)
 
                     outputs = self.network(torch.from_numpy(np.array([np.reshape(f[0], [self.img_size[0], self.img_size[1], self.img_size[2]]) for f
-                                            in ff]).transpose((0,3,1,2))).float())
-                    loss = self.network.return_loss(outputs, torch.from_numpy(np.array([f[1] for f in ff])).long())
+                                            in ff]).transpose((0,3,1,2))).float().to(self.device))
+                    loss = self.network.return_loss(outputs, torch.from_numpy(np.array([f[1] for f in ff])).long().to(self.device)).to(self.device)
 
-                    valid_step_accuracy = int(self.network.return_accuracy(outputs, torch.from_numpy(np.array([f[1] for f in ff])), 1,
-                                                self.task_type))
+                    valid_step_accuracy = int(self.network.return_accuracy(outputs, torch.from_numpy(np.array([f[1] for f in ff])).to(self.device), 1,
+                                                self.task_type).to(self.device))
 
                     epoch_loss_valid += loss.item()
                     epoch_accur_valid += (100*valid_step_accuracy)/self.batch_size
@@ -458,7 +480,11 @@ class TrainRunner(NetRunner):
                 # print("saving figure")
                 # # print(figure)
 
+                self.graph_op.plot('loss', 'train', 'Class Loss', epoch, train_aver_loss)
+                self.graph_op.plot('loss', 'valid', 'Class Loss', epoch, valid_aver_loss)
 
+                self.graph_op.plot('acc', 'train', 'Class Accuracy', epoch, epoch_accur_train)
+                self.graph_op.plot('acc', 'valid', 'Class Accuracy', epoch, epoch_accur_valid)
 
                 # figure_file = os.path.join(loss_plot_path,'train_acur_plot.jpg')
                 # figure.savefig(figure_file)
@@ -470,11 +496,11 @@ class TrainRunner(NetRunner):
                             epoch_accur_valid, epoch_duration_valid))
 
                 if prev_loss > valid_aver_loss:
-                    # if not os.path.isdir(self.checkpoint_dir):
-                    #     os.mkdir(self.checkpoint_dir)
+                    if not os.path.isdir(self.checkpoint_dir):
+                        os.mkdir(self.checkpoint_dir)
 
-                    # if not os.path.isdir(os.path.join(self.tr_path, self.data_set, self.timestamp)):
-                    #     os.mkdir(os.path.join(self.tr_path, self.data_set, self.timestamp))
+                    if not os.path.isdir(self.tr_path):
+                        os.mkdir(self.tr_path)
 
                     model_file_path = os.path.join(self.ckpnt_path,
                                                    self.timestamp + '_split_' + str(split))
@@ -493,29 +519,24 @@ class TrainRunner(NetRunner):
                     ref_iter_count += 1
                     if ref_iter_count == self.ref_steps+1:
                         print('\nEarly stopping\n Saving last best model:')
-                        final_network = torch.load(model_file_path)
+                        final_network = torch.load(os.path.join(model_file_path, 'model.pth'))
                         # pprint.pprint(final_network.state_dict())
                         print("Importing model to ONNX")
-                        # model_file_path_onnx = create_ckpt_data_onnx(self.ckpnt_path, self.network_type, event_time)
-
-
-
-                        dummy_input = Variable(torch.randn(1, *[self.img_size[2], self.img_size[0], self.img_size[1]]))
-                        torch_onnx.export(final_network, dummy_input, model_file_path, verbose=False)
+                        dummy_input = Variable(torch.randn(1, *[self.img_size[2], self.img_size[0], self.img_size[1]]).to(self.device))
+                        torch_onnx.export(final_network, dummy_input, os.path.join(model_file_path, 'model.onnx'), verbose=False)
 
                         print('Done')
-                        status = "FINISHED: Early stopping"
-                        return status
+
+                        return prev_loss
                 gc.collect()
             print("Finalizing training")
-            final_network = torch.load(model_file_path)
+            final_network = torch.load(os.path.join(model_file_path, 'model.pth'))
             # pprint.pprint(final_network.state_dict())
             print("Importing model to ONNX")
             # model_file_path_onnx = create_ckpt_data_onnx(self.ckpnt_path, self.network_type, event_time)
-            dummy_input = Variable(torch.randn(1, *[self.img_size[2], self.img_size[0], self.img_size[1]]))
-            torch_onnx.export(final_network, dummy_input, model_file_path, verbose=False)
+            dummy_input = Variable(torch.randn(1, *[self.img_size[2], self.img_size[0], self.img_size[1]]).to(self.device))
+            torch_onnx.export(final_network, dummy_input, os.path.join(model_file_path, 'model.onnx'), verbose=False)
 
             print('Done')
-            status = 'FINISHED'
             h5_file.close()
-            return status
+            return prev_loss

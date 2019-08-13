@@ -14,7 +14,11 @@
 
 # --- imports -----------------------------------------------------------------
 
+import torch
+import torch.nn as nn
 import tensorflow as tf
+import torch.nn.functional as F
+
 from network.wrappers.NetworkBase import NetworkBase
 
 
@@ -127,3 +131,64 @@ class UNet(NetworkBase):
             self.nets.append(output)
 
         return output
+
+
+
+class UNet_pt(NetworkBase, nn.Module):
+    def __init__(self, network_type, loss, accuracy, lr, framework,  training, trainable_layers=None, num_filters=16,
+                 optimizer='adam', nonlin='elu', num_classes=2, dropout=0.25):
+        NetworkBase.__init__(self, network_type=network_type, loss=loss, accuracy=accuracy, framework=framework, lr=lr, training=training,
+                             trainable_layers=trainable_layers, num_filters=num_filters, optimizer=optimizer, nonlin=nonlin,
+                             num_classes=num_classes, dropout=dropout)
+        nn.Module.__init__(self)
+
+        self.dconv_down1 = double_conv(1, 16)
+        self.dconv_down2 = double_conv(16, 32)
+        self.dconv_down3 = double_conv(32, 64)
+        self.dconv_down4 = double_conv(64, 128)
+
+        self.maxpool = nn.MaxPool2d(2)
+        self.upsample = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
+
+        self.dconv_up3 = double_conv(64 + 128, 64)
+        self.dconv_up2 = double_conv(32 + 64, 32)
+        self.dconv_up1 = double_conv(32 + 16, 16)
+
+        self.conv_last = nn.Conv2d(16, num_classes, 1)
+
+    def forward(self, x):
+        conv1 = self.dconv_down1(x)
+        x = self.maxpool(conv1)
+
+        conv2 = self.dconv_down2(x)
+        x = self.maxpool(conv2)
+
+        conv3 = self.dconv_down3(x)
+        x = self.maxpool(conv3)
+
+        x = self.dconv_down4(x)
+
+        x = self.upsample(x)
+        x = torch.cat([x, conv3], dim=1)
+
+        x = self.dconv_up3(x)
+        x = self.upsample(x)
+        x = torch.cat([x, conv2], dim=1)
+
+        x = self.dconv_up2(x)
+        x = self.upsample(x)
+        x = torch.cat([x, conv1], dim=1)
+
+        x = self.dconv_up1(x)
+
+        out = self.conv_last(x)
+
+        return out
+
+def double_conv(in_channels, out_channels):
+    return nn.Sequential(
+        nn.Conv2d(in_channels, out_channels, 3, padding=1),
+        nn.ReLU(inplace=True),
+        nn.Conv2d(out_channels, out_channels, 3, padding=1),
+        nn.ReLU(inplace=True)
+    )

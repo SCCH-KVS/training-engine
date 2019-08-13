@@ -15,9 +15,16 @@
 # --- imports -----------------------------------------------------------------
 import importlib
 import tensorflow as tf
+import torch
+import tf2onnx
 
+
+import onnx
+from onnx_tf.backend import prepare
+
+from utils.VisdomLogger import *
 from utils.DataParser import DataParser
-from network.wrappers import ConvNet, UNet, FakeDetection
+from network.wrappers import ConvNet, VGG19, UNet
 
 
 class NetRunner:
@@ -30,6 +37,7 @@ class NetRunner:
         self.X_valid = None
         self.y_valid = None
         self.num_classes = None
+
         self._parse_config(args, experiment_id)
 
     def _parse_config(self, args, experiment_id):
@@ -39,14 +47,12 @@ class NetRunner:
         :param experiment_id:
         :return:
         """
-
         if not args:
             if experiment_id:
                 config = importlib.import_module('configs.config_' + experiment_id)
                 args = config.load_config()
             else:
-                config = importlib.import_module('configs.config')
-                args = config.ConfigFlags().return_flags()
+                raise ValueError('No arguments or configuration data given')
         # Mandatory parameters for all architectures
         self.network_type = args.net
         self.is_training = args.training_mode
@@ -242,13 +248,21 @@ class NetRunner:
             self.graph_op = tf.global_variables_initializer()
 
     def build_pytorch_pipeline(self):
+        cuda_en = torch.cuda.is_available()
+        if self.gpu_load != 0 and cuda_en:
+            self.device = torch.device('cuda')
+            print("CUDA detecvted")
+        else:
+            self.device = torch.device('cpu')
+            print("CPU detecvted")
+
+
         self.learning_rate = self.lr
-        self.network = self._pick_model()
+        self.network = self._pick_model().to(self.device)
 
         self.train_op = self.network.return_optimizer(net_param=self.network.parameters())
 
-        return NotImplementedError
-
+        self.graph_op = VisdomPlotter(env_name='Training_Procedure')
 
     def _pick_model(self):
         """
@@ -256,29 +270,39 @@ class NetRunner:
         :return:
         """
         if self.framework == "tensorflow":
-            if self.network_type == 'ConvNet':
-                return ConvNet.ConvNet(self.network_type, self.loss_type, self.accuracy_type, self.learning_rate, framework=self.framework,
-                                       training=self.is_training, num_filters=self.num_filters, nonlin=self.nonlin, num_classes=self.num_classes,
-                                          trainable_layers=self.trainable_layers)
-            elif self.network_type == 'UNet':
-                return UNet.UNet(self.network_type, self.loss_type, self.accuracy_type, self.learning_rate,  framework=self.framework, training=self.training_mode,
-                                 trainable_layers=self.trainable_layers, num_classes=self.num_classes)
-            # elif self.network_type == 'VGG16':
-            #         #     return VGG16.VGG16(self.network_type, self.loss_type, self.accuracy_type, self.learning_rate,
-            #         #                        training=self.training_mode, framework=self.framework, num_classes=self.num_classes, trainable_layers=self.trainable_layers)
-            elif self.network_type == 'FakeDetection':
-                return FakeDetection.FakeDetection(self.network_type, self.loss_type, self.accuracy_type, self.learning_rate, training=self.training_mode,
-                                 trainable_layers=self.trainable_layers, num_classes=self.num_classes)
+            if self.network_type.endswith('.onnx'):
+                print('onnx!')
+                return 'onxx'
             else:
-                raise ValueError('Architecture does not exist')
+                if self.network_type == 'ConvNet':
+                    return ConvNet.ConvNet(self.network_type, self.loss_type, self.accuracy_type, self.learning_rate, framework=self.framework,
+                                           training=self.is_training, num_filters=self.num_filters, nonlin=self.nonlin, num_classes=self.num_classes,
+                                              trainable_layers=self.trainable_layers)
+                elif self.network_type == 'UNet':
+                    return UNet.UNet(self.network_type, self.loss_type, self.accuracy_type, self.learning_rate,  framework=self.framework, training=self.training_mode,
+                                     trainable_layers=self.trainable_layers, num_classes=self.num_classes)
+                elif self.network_type == 'VGG19':
+                            return VGG19.VGG19_tf(self.network_type, self.loss_type, self.accuracy_type, self.learning_rate,
+                                               training=self.training_mode, framework=self.framework, num_classes=self.num_classes, trainable_layers=self.trainable_layers)
+
+                else:
+                    raise ValueError('Architecture does not exist')
         elif self.framework == "pytorch":
             if self.network_type == 'ConvNet':
                 return ConvNet.ConvNet_pt(self.network_type, self.loss_type, self.accuracy_type, self.learning_rate, framework=self.framework,
                                        training=self.is_training, num_filters=self.num_filters, nonlin=self.nonlin, num_classes=self.num_classes,
                                           trainable_layers=self.trainable_layers)
+            elif self.network_type == 'VGG19':
+                return VGG19.VGG19_pt(self.network_type, self.loss_type, self.accuracy_type, self.learning_rate, framework=self.framework,
+                                       training=self.is_training, num_filters=self.num_filters, nonlin=self.nonlin, num_classes=self.num_classes,
+                                          trainable_layers=self.trainable_layers)
+            elif self.network_type == 'UNet':
+                return UNet.UNet_pt(self.network_type, self.loss_type, self.accuracy_type, self.learning_rate, framework=self.framework,
+                                       training=self.is_training, num_filters=self.num_filters, nonlin=self.nonlin, num_classes=self.num_classes,
+                                          trainable_layers=self.trainable_layers)
+
             else:
                 raise ValueError('Architecture does not exist')
-
 
     def _initialize_short_summary(self):
         """

@@ -224,6 +224,8 @@ class NetworkBase:
                 return mse_pt
             if key == 'mse_loss':
                 return mse_loss_pt
+            elif key == 'dice_jaccard':
+                return dice_loss
             else:
                 raise ValueError('Unexpected metric function %s' % key)
 
@@ -247,10 +249,6 @@ class NetworkBase:
         elif framework == "pytorch":
             if key == 'IoU':
                 return IoU_pt
-            elif key == 'dice_sorensen':
-                return dice_sorensen_pt
-            elif key == 'dice_jaccard':
-                return dice_jaccard_pt
             elif key == 'mse':
                 return mse_pt
             elif key == 'hinge':
@@ -304,21 +302,21 @@ class NetworkBase:
         """
         with tf.name_scope(name + name_postfix):
             conv = tf.layers.conv2d(input_layer, filters=filter_scale * n_filters, kernel_size=filter_size,
-                                    activation=None, padding=padding, kernel_regularizer=tf.contrib.layers.l2_regularizer(scale=0.1),
+                                    activation=None, padding=padding,
                                     name='conv_' + name_postfix)
             batch_norm = tf.layers.batch_normalization(conv, training=is_training, fused=False, name='batch_' + name_postfix)
                 # weights, biases = NetworkBase.weights_and_biases(tf.shape(batch_norm), tf.shape(batch_norm)[-1])
                 # nonlin = nonlin_f(tf.matmul(batch_norm, weights) + biases, name='activation_' + name_postfix)
-            nonlin = nonlin_f(batch_norm, name='activation_' + name_postfix)
+            nonlin = nonlin_f(conv, name='activation_' + name_postfix)
         return conv, batch_norm, nonlin
 
 
     @staticmethod
     def _conv_bn_layer_pt(n_in, n_out, filter_size=3, stride=1, is_training=True, nonlin_f=None,
-                       padding='same', name_postfix='1_1'):
+                       padding=1, name_postfix='1_1'):
         m = nn.Sequential(
-            nn.Conv2d(n_in, n_out, filter_size, stride),
-            nn.BatchNorm2d(n_out),
+            nn.Conv2d(n_in, n_out, filter_size, stride, padding),
+            # nn.BatchNorm2d(n_out),
             nonlin_f()
         )
         return m

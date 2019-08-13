@@ -14,6 +14,8 @@
 
 # --- imports -----------------------------------------------------------------
 
+import torch
+import torch.nn.functional as F
 import torch.nn as nn
 import tensorflow as tf
 import numpy as np
@@ -254,41 +256,36 @@ def IoU_pt(y_pred, y_true):
     :return
     float: IOU score
     """
-    raise NotImplementedError
-    # ious = []
-    # pred = pred.view(-1)
-    # target = target.view(-1)
-    #
-    # # Ignore IoU for background class ("0")
-    # for cls in range(1, n_classes):  # This goes from 1:n_classes-1 -> class "0" is ignored
-    #     pred_inds = pred == cls
-    #     target_inds = target == cls
-    #     intersection = (pred_inds[target_inds]).long().sum().data.cpu()[0]  # Cast to long to prevent overflows
-    #     union = pred_inds.long().sum().data.cpu()[0] + target_inds.long().sum().data.cpu()[0] - intersection
-    #     if union == 0:
-    #         ious.append(float('nan'))  # If there is no ground truth, do not include in evaluation
-    #     else:
-    #         ious.append(float(intersection) / float(max(union, 1)))
-    # return np.array(ious)
+    smooth = 1.
+    y_pred_sig = F.sigmoid(y_pred)
+    num = y_true.size(0)  # Number of batches
+    x = y_pred_sig.view(num, -1).float()  # Flatten
+    y = y_true.view(num, -1).float()
+    intersection = torch.sum(x * y)
+    score = (intersection + smooth) / (torch.sum(x) + torch.sum(y) - intersection + smooth)
+    out = torch.sum(score)
+    print("iou {}".format(out))
+    return out
 
 
 
+def dice_loss(y_pred, y_true, eps=1e-7):
+    return DiceLoss_pt()(y_pred, y_true)
 
-def dice_jaccard_pt(y_pred, y_true):
-    """Returns a (approx) dice score
-    intesection = y_pred.flatten() * y_true.flatten()
-    Then, dice = 2 * intersection / (y_pred.sum() + y_true.sum())
-    :param y_pred: predicted labels (4-D array): (N, H, W, 1)
-    :param y_true: groundtruth labels (4-D array): (N, H, W, 1)
-    :return
-        float: dice score
-    """
-    raise NotImplementedError
+class DiceLoss_pt(nn.Module):
+    def __init__(self, weight=None, size_average=True):
+        super(DiceLoss_pt, self).__init__()
 
-
-def dice_sorensen_pt(y_pred, y_true):
-    raise NotImplementedError
-
+    def forward(self, y_pred, y_true):
+        smooth = 1.
+        y_pred_sig = F.sigmoid(y_pred)
+        num = y_true.size(0)  # Number of batches
+        x = y_pred_sig.view(num, -1).float()  # Flatten
+        y = y_true.view(num, -1).float()
+        intersection = torch.sum(x * y)
+        score = (2. * intersection + smooth) / (torch.sum(x) + torch.sum(y) + smooth)
+        out = 1 - torch.sum(score) / num
+        return out
 
 def softmax_pt(y_pred, y_true, epsilon=1e-10):
     """

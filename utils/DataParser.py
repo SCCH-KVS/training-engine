@@ -168,7 +168,7 @@ class DataParser:
             if self.is_training:
                 raise ValueError("not sufficient data for given task")
             else:
-                if (os.path.splitext(line)[1].lower() in ['.jpg', '.jpeg', '.png']):
+                if (os.path.splitext(line)[1].lower() in ['.jpg', '.jpeg', '.png', '.bmp']):
                     X_data_ = [line.rstrip().split()[0] for line in file_lines]
                     y_data_ = []
         else:
@@ -221,7 +221,7 @@ class DataParser:
                     for d in file_lines['meta']:
                         lst = []
                         for o in d['objects']:
-                            lst.append([o['bb'] + one_to_onehot(o['object_class'], self.num_classes)])
+                            lst.append(o['bb'] + one_to_onehot(o['object_class'], self.num_classes))
                         y_list.append(lst)
 
                     ll = max([len(l) for l in y_list])
@@ -229,7 +229,7 @@ class DataParser:
                     for l in y_list:
                         m = l
                         for i in range(ll - len(m)):
-                            m.append([[0, 0, 0, 0] + [0 for k in range(10)]])
+                            m.append([0, 0, 0, 0] + [0 for k in range(10)])
                         y_data_.append(m)
                     y_data_ = np.array(y_data_)
                 else:
@@ -244,7 +244,7 @@ class DataParser:
         return X_data_, y_data_
 
     def _data_folder_parse(self, h5py_file_name, log_file_name):
-        path_list = [i for i in os.listdir(self.data_folder) if os.path.isdir(i)]
+        path_list = [i for i in os.listdir(self.data_folder) if os.path.isdir(os.path.join(self.data_folder, i))]
         if len(path_list) < 2:
             if self.is_training:
                 raise ValueError("not sufficient data for given task")
@@ -316,9 +316,11 @@ class DataParser:
             # y_data = one_hot_encode(y_data)
         elif self.framework == 'pytorch':
             import torchvision.datasets as datasets
-            mnist_trainset = datasets.MNIST(root=os.path.join(self.data_path, self.data_set), train=True, download=True, transform=None)
             import struct
             if self.is_training:
+                mnist_trainset = datasets.MNIST(root=os.path.join(self.data_path, self.data_set), train=True,
+                                                download=True, transform=None)
+
                 with open(os.path.join(self.data_path, self.data_set + r'/raw/train-labels-idx1-ubyte'), 'rb') as lbpath:
                     magic, n = struct.unpack('>II', lbpath.read(8))
                     y_data = np.fromfile(lbpath, dtype=np.uint8).tolist()
@@ -327,12 +329,14 @@ class DataParser:
                     magic, num, rows, cols = struct.unpack(">IIII", imgpath.read(16))
                     X_data = np.fromfile(imgpath, dtype=np.uint8).reshape((-1, 28, 28, 1))
             else:
-                with open(os.path.join(self.data_path, self.data_set + r'/raw/test-labels-idx1-ubyte'),
+                mnist_trainset = datasets.MNIST(root=os.path.join(self.data_path, self.data_set), train=False, download=True,
+                                                transform=None)
+                with open(os.path.join(self.data_path, self.data_set + r'/raw/t10k-labels-idx1-ubyte'),
                           'rb') as lbpath:
                     magic, n = struct.unpack('>II', lbpath.read(8))
                     self.y_data = np.fromfile(lbpath, dtype=np.uint8).tolist()
 
-                with open(os.path.join(self.data_path, self.data_set + r'/raw/test-images-idx3-ubyte'),
+                with open(os.path.join(self.data_path, self.data_set + r'/raw/t10k-images-idx3-ubyte'),
                           'rb') as imgpath:
                     magic, num, rows, cols = struct.unpack(">IIII", imgpath.read(16))
                     self.X_data = np.fromfile(imgpath, dtype=np.uint8).reshape((-1, 28, 28, 1))
@@ -380,6 +384,7 @@ class DataParser:
                 # works ONLY for Windows. I have NO idea why
                 # X_data = cifar_trainset.train_data
                 # y_data = cifar_trainset.train_labels
+                X_data = [np.asarray(x) for x, _ in cifar_trainset]
                 y_data = [x for _, x in cifar_trainset]
                 [np.asarray(x) for x, _ in cifar_trainset]
 
