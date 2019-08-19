@@ -24,7 +24,7 @@ from onnx_tf.backend import prepare
 
 from utils.VisdomLogger import *
 from utils.DataParser import DataParser
-from network.wrappers import ConvNet, VGG19, UNet
+from network.wrappers import ConvNet, VGG19, UNet, LeNet
 
 
 class NetRunner:
@@ -284,6 +284,10 @@ class NetRunner:
                 elif self.network_type == 'VGG19':
                             return VGG19.VGG19_tf(self.network_type, self.loss_type, self.accuracy_type, self.learning_rate,
                                                training=self.training_mode, framework=self.framework, num_classes=self.num_classes, trainable_layers=self.trainable_layers)
+                elif self.network_type == 'LeNet':
+                    return LeNet.LeNet(self.network_type, self.loss_type, self.accuracy_type, self.learning_rate, framework=self.framework,
+                                           training=self.is_training, num_filters=self.num_filters, nonlin=self.nonlin, num_classes=self.num_classes,
+                                              trainable_layers=self.trainable_layers)
 
                 else:
                     raise ValueError('Architecture does not exist')
