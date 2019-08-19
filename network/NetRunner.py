@@ -304,6 +304,10 @@ class NetRunner:
                 return UNet.UNet_pt(self.network_type, self.loss_type, self.accuracy_type, self.learning_rate, framework=self.framework,
                                        training=self.is_training, num_filters=self.num_filters, nonlin=self.nonlin, num_classes=self.num_classes,
                                           trainable_layers=self.trainable_layers)
+            elif self.network_type == 'LeNet':
+                return LeNet.LeNet_pt(self.network_type, self.loss_type, self.accuracy_type, self.learning_rate, framework=self.framework,
+                                       training=self.is_training, num_filters=self.num_filters, nonlin=self.nonlin, num_classes=self.num_classes,
+                                          trainable_layers=self.trainable_layers)
 
             else:
                 raise ValueError('Architecture does not exist')

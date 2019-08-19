@@ -13,6 +13,7 @@
 #
 
 # --- imports -----------------------------------------------------------------
+import torch
 import torch.nn as nn
 import tensorflow as tf
 import torch.nn.functional as F
@@ -32,7 +33,6 @@ class LeNet(NetworkBase):
         :param optimizer:   used optimizer
         :param nonlin:      used nonliniearity
         :param num_classes: number of classes/labels
-        :param dropout:     dropout ratio
         """
         super().__init__(network_type=network_type, loss=loss, accuracy=accuracy, framework=framework, lr=lr, training=training,
                              trainable_layers=trainable_layers, num_filters=num_filters, optimizer=optimizer, nonlin=nonlin,
@@ -72,3 +72,40 @@ class LeNet(NetworkBase):
             output_p = tf.layers.dense(fl_2, units=self.num_classes, activation='softmax', name='output')
 
         return output_p
+
+
+class LeNet_pt(NetworkBase, nn.Module):
+    def __init__(self, network_type, loss, accuracy, lr, framework,  training, trainable_layers=None, num_filters=16,
+                 optimizer='adam', nonlin='elu', num_classes=2):
+        NetworkBase.__init__(self, network_type=network_type, loss=loss, accuracy=accuracy, framework=framework, lr=lr, training=training,
+                             trainable_layers=trainable_layers, num_filters=num_filters, optimizer=optimizer, nonlin=nonlin,
+                             num_classes=num_classes)
+        nn.Module.__init__(self)
+
+        # build net
+        # Layer 1: conv and average pooling
+        self.conv_1_1 = self._conv_bn_layer_pt(1, n_out=6, filter_size=5, stride=1, is_training=True,
+                                               nonlin_f=self.nonlin_f, padding=1, name_postfix='1_1')
+        self.pool_1 = nn.AvgPool2d(kernel_size=2, stride=2)
+
+        # Layer 2: conv, avg pooling, faltten
+        self.conv_2_1 = self._conv_bn_layer_pt(6, 16, filter_size=5, stride=1, is_training=True,
+                                               nonlin_f=self.nonlin_f, padding=1, name_postfix='1_1')
+        self.pool_2 = nn.AvgPool2d(kernel_size=2, stride=2)
+
+        # Layer 3 and 4: FC
+        self.fc_1 = nn.Linear(400, 120)
+        self.fc_2 = nn.Linear(120, 84)
+        self.out = nn.Linear(84, self.num_classes)
+
+    def forward(self, X):
+        x = self.conv_1_1(X)
+        x = self.pool_1(x)
+        x = self.conv_2_1(x)
+        x = self.pool_2(x)
+        x = x.view(x.size(0), -1)
+        x = self.fc_1(x)
+        x = self.fc_2(x)
+        x = self.out(x)
+
+        return x

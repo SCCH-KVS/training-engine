@@ -50,8 +50,6 @@ class DataParser:
 
         self._parse_data()
 
-
-
     def get_data_size(self):
         return self.data_size
 
@@ -73,7 +71,6 @@ class DataParser:
     def get_tr_path(self):
         return self.tr_path
 
-
     def _path_preparation(self):
         if self.experiment_path is None:
             self.experiment_path = os.path.join(os.path.dirname(os.path.abspath('utils')), "experiments")
@@ -83,17 +80,16 @@ class DataParser:
         if not os.path.exists(self.data_path):
             os.makedirs(self.data_path)
         self.info_path = os.path.join(self.experiment_path, "info_logs", self.data_set)
-        if not os.path.exists(self.info_path):
-            os.makedirs(self.info_path)
-        self.tr_path = os.path.join(self.experiment_path, "train_logs", self.data_set, self.timestamp)
-        if not os.path.exists(self.tr_path):
-            os.makedirs(self.tr_path)
-        self.ckpnt_path = os.path.join(self.experiment_path, "ckpnt_logs", self.data_set, self.timestamp)
-        if not os.path.exists(self.ckpnt_path):
-            os.makedirs(self.ckpnt_path)
 
-
-
+        if self.is_training:
+            if not os.path.exists(self.info_path):
+                os.makedirs(self.info_path)
+            self.tr_path = os.path.join(self.experiment_path, "train_logs", self.data_set, self.timestamp)
+            if not os.path.exists(self.tr_path):
+                os.makedirs(self.tr_path)
+            self.ckpnt_path = os.path.join(self.experiment_path, "ckpnt_logs", self.data_set, self.timestamp)
+            if not os.path.exists(self.ckpnt_path):
+                os.makedirs(self.ckpnt_path)
 
     def _parse_data(self):
 
@@ -106,14 +102,13 @@ class DataParser:
             file_name += '_cent'
         file_name += '.hdf5'
 
+        self._path_preparation()
+
         if self.is_training:
-            self._path_preparation()
-            h5py_file_name = os.path.join(self.data_path, file_name)
             log_file_name = os.path.join(self.info_path, self.timestamp + ".json")
         else:
-            h5py_file_name = ''
             log_file_name = ''
-
+        h5py_file_name = os.path.join(self.data_path, file_name)
 
         if self.data_set is "MNIST":
             self._load_mnist(h5py_file_name, log_file_name)
