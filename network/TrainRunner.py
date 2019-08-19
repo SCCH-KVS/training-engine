@@ -153,7 +153,7 @@ class TrainRunner(NetRunner):
                         epoch_duration_valid = 0
 
                     # step_cout_train = 1
-                    for i in tqdm(train_generator, total=train_lim, unit=' steps', desc='Epoch {:d} train'.format(epoch), disable=True):
+                    for i in tqdm(train_generator, total=train_lim, unit=' steps', desc='Epoch {:d} train'.format(epoch), disable=False):
                         with tf.device('/cpu:0'):
                             total_recall_counter_train += 1
                             start_time = time.time()
@@ -198,7 +198,7 @@ class TrainRunner(NetRunner):
                         # step_cout_train += 1
 
                     # step_cout_valid = 1
-                    for i in tqdm(valid_generator, total=valid_lim, unit=' steps', desc='Epoch {:d} valid'.format(epoch), disable=True):
+                    for i in tqdm(valid_generator, total=valid_lim, unit=' steps', desc='Epoch {:d} valid'.format(epoch), disable=False):
                         with tf.device('/cpu:0'):
                             total_recall_counter_valid += 1
 

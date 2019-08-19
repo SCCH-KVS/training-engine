@@ -13,7 +13,6 @@
 #
 
 # --- imports -----------------------------------------------------------------
-
 import gc
 import ast
 import json
@@ -107,10 +106,13 @@ class DataParser:
             file_name += '_cent'
         file_name += '.hdf5'
 
-        self._path_preparation()
-
-        h5py_file_name = os.path.join(self.data_path, file_name)
-        log_file_name = os.path.join(self.info_path, self.timestamp + ".json")
+        if self.is_training:
+            self._path_preparation()
+            h5py_file_name = os.path.join(self.data_path, file_name)
+            log_file_name = os.path.join(self.info_path, self.timestamp + ".json")
+        else:
+            h5py_file_name = ''
+            log_file_name = ''
 
 
         if self.data_set is "MNIST":
@@ -318,7 +320,7 @@ class DataParser:
             import torchvision.datasets as datasets
             import struct
             if self.is_training:
-                mnist_trainset = datasets.MNIST(root=os.path.join(self.data_path, self.data_set), train=True,
+                mnist_trainset = datasets.MNIST(root=os.path.join(self.data_path), train=True,
                                                 download=True, transform=None)
 
                 with open(os.path.join(self.data_path, self.data_set + r'/raw/train-labels-idx1-ubyte'), 'rb') as lbpath:
