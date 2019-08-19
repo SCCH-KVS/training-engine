@@ -16,13 +16,15 @@
 
 import sys
 import importlib
+import time
 
 from network.TrainRunner import TrainRunner
 from network.InferenceRunner import InferenceRunner
 
-EXPERIMENT_ID = 'ConvNet'
+EXPERIMENT_ID = 'LeNet'
 
 def run(experiment_id):
+    start_time = time.time()
     config = importlib.import_module('configs.config_' + experiment_id)
     args = config.load_config()
     if args.training_mode:
@@ -32,6 +34,8 @@ def run(experiment_id):
         inference = InferenceRunner(experiment_id=experiment_id)
         inference.start_inference()
         # raise ValueError('Inference not implemented yet')
+    elapsed_time = time.time() - start_time
+    print(elapsed_time)
 
 
 if __name__ == '__main__':
