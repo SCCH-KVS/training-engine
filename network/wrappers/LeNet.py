@@ -62,13 +62,9 @@ class LeNet(NetworkBase):
             flat_1 = tf.layers.flatten(pooling_2, name='flatten')
             self.nets.extend([conv_2_1])
 
-        with tf.name_scope('fl1'):
-            fl_1 = tf.layers.dense(flat_1, units=120, activation='relu', name='fl_1')
-
-        with tf.name_scope('fl2'):
-            fl_2 = tf.layers.dense(fl_1, units=84, activation='relu', name='fl_2')
-
         with tf.name_scope('s_outputs'):
+            fl_1 = tf.layers.dense(flat_1, units=120, activation='relu', name='fl_1')
+            fl_2 = tf.layers.dense(fl_1, units=84, activation='relu', name='fl_2')
             output_p = tf.layers.dense(fl_2, units=self.num_classes, activation='softmax', name='output')
 
         return output_p

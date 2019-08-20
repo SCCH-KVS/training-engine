@@ -24,7 +24,7 @@ from onnx_tf.backend import prepare
 
 from utils.VisdomLogger import *
 from utils.DataParser import DataParser
-from network.wrappers import ConvNet, VGG19, UNet, LeNet
+from network.wrappers import ConvNet, VGG19, UNet, LeNet, VGG16
 
 
 class NetRunner:
@@ -288,7 +288,10 @@ class NetRunner:
                     return LeNet.LeNet(self.network_type, self.loss_type, self.accuracy_type, self.learning_rate, framework=self.framework,
                                            training=self.is_training, num_filters=self.num_filters, nonlin=self.nonlin, num_classes=self.num_classes,
                                               trainable_layers=self.trainable_layers)
-
+                elif self.network_type == 'VGG16':
+                    return VGG16.VGG16(self.network_type, self.loss_type, self.accuracy_type, self.learning_rate,
+                                     framework=self.framework, training=self.training_mode,
+                                     trainable_layers=self.trainable_layers, num_classes=self.num_classes)
                 else:
                     raise ValueError('Architecture does not exist')
         elif self.framework == "pytorch":
@@ -308,7 +311,10 @@ class NetRunner:
                 return LeNet.LeNet_pt(self.network_type, self.loss_type, self.accuracy_type, self.learning_rate, framework=self.framework,
                                        training=self.is_training, num_filters=self.num_filters, nonlin=self.nonlin, num_classes=self.num_classes,
                                           trainable_layers=self.trainable_layers)
-
+            elif self.network_type == 'VGG16':
+                return VGG16.VGG16_pt(self.network_type, self.loss_type, self.accuracy_type, self.learning_rate, framework=self.framework,
+                                       training=self.is_training, num_filters=self.num_filters, nonlin=self.nonlin, num_classes=self.num_classes,
+                                          trainable_layers=self.trainable_layers)
             else:
                 raise ValueError('Architecture does not exist')
 
