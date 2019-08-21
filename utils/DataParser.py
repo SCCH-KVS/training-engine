@@ -23,7 +23,7 @@ from psutil import virtual_memory
 from sklearn.model_selection import train_test_split
 import time
 from utils.utils import *
-
+import numpy as np
 
 class DataParser:
 
@@ -455,7 +455,9 @@ class DataParser:
                     self.slice_split = self._cross_val_split(len(y_data))
                     with h5py.File(h5py_file_name, 'a') as f:
                         f.create_dataset('X_data', data=X_data)
-                        f.create_dataset('y_data', data=one_hot_encode(y_data))
+                        y_data = np.eye(100)[y_data]
+                        y_data = np.squeeze(y_data)
+                        f.create_dataset('y_data', data=y_data)
                     self._dump_json_logs(h5py_file_name, log_file_name)
                     self.dict_data_path = h5py_file_name
                     self.log_info_path = log_file_name
