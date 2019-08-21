@@ -129,12 +129,8 @@ class VGG16_pt(NetworkBase, nn.Module):
                              optimizer=optimizer, nonlin=nonlin, num_classes=num_classes)
         nn.Module.__init__(self)
 
-        dimensions = 3
-        if self.network_type ==' MNIST':
-            dimensions = 1
-
         # Conv 1
-        self.conv_1_1 = self._conv_bn_layer_pt(dimensions, self.num_filters, filter_size=3, stride=1, is_training=True,
+        self.conv_1_1 = self._conv_bn_layer_pt(1, self.num_filters, filter_size=3, stride=1, is_training=True,
                                                nonlin_f=self.nonlin_f, padding=1, name_postfix='1_1')
         self.conv_1_2 = self._conv_bn_layer_pt(num_filters, self.num_filters, filter_size=3, stride=1, is_training=True,
                                                nonlin_f=self.nonlin_f, padding=1, name_postfix='1_1')
@@ -209,10 +205,11 @@ class VGG16_pt(NetworkBase, nn.Module):
         x = self.conv_4_3(x)
         x = self.pool_4(x)
 
-        x = self.conv_5_1(x)
-        x = self.conv_5_2(x)
-        x = self.conv_5_3(x)
-        x = self.pool_5(x)
+        #Remove conv 5 for MNIST
+        #x = self.conv_5_1(x)
+        #x = self.conv_5_2(x)
+        #x = self.conv_5_3(x)
+        #x = self.pool_5(x)
 
         x = x.view(x.size(0), -1)
 
