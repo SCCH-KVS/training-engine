@@ -435,8 +435,8 @@ class DataParser:
                 if self.is_training:
                     cifar_trainset = datasets.CIFAR100(root=os.path.join(self.data_path, self.data_set), train=True, download=True, transform=None)
                     y_data = [x for _, x in cifar_trainset]
-                    [np.asarray(x) for x, _ in cifar_trainset]
-                    # X_data = cifar_trainset.train_data
+                    X_data = [np.asarray(x) for x, _ in cifar_trainset]
+                    #X_data = cifar_trainset.train_data
                     # y_data = cifar_trainset.train_labels
                 else:
                     cifar_trainset = datasets.CIFAR100(root=os.path.join(self.data_path, self.data_set), train=True, download=True, transform=None)

@@ -39,7 +39,6 @@ class VGG16(NetworkBase):
                              num_classes=num_classes)
         self.weights, self.biases, self.nets = [], [], []
 
-
     def build_net(self, X):
         """
         Build the VGG16 Convolutional Neural Network
@@ -52,7 +51,7 @@ class VGG16(NetworkBase):
                                                                     is_training=self.is_training,
                                                                     nonlin_f=self.nonlin_f,
                                                                     name_postfix='1_1')
-            conv_1_2, batch_1_2, activ_1_2 = self._conv_bn_layer_tf(activ_1_1, n_filters=self.num_filters,
+            conv_1_2, batch_1_2, activ_1_2 = self._conv_bn_layer_tf(conv_1_1, n_filters=self.num_filters,
                                                                     filter_size=3, is_training=self.is_training,
                                                                     nonlin_f=self.nonlin_f, name_postfix='1_2')
             pooling_1 = tf.layers.max_pooling2d(conv_1_2, pool_size=2, strides=2, padding='same', name='pooling_1')
@@ -62,7 +61,7 @@ class VGG16(NetworkBase):
             conv_2_1, batch_2_1, activ_2_1 = self._conv_bn_layer_tf(pooling_1, n_filters=self.num_filters, filter_scale=2,
                                                                     filter_size=3, is_training=self.is_training,
                                                                     nonlin_f=self.nonlin_f, name_postfix='2_1')
-            conv_2_2, batch_2_2, activ_2_2 = self._conv_bn_layer_tf(activ_2_1, n_filters=self.num_filters,
+            conv_2_2, batch_2_2, activ_2_2 = self._conv_bn_layer_tf(conv_2_1, n_filters=self.num_filters,
                                                                     filter_scale=2,
                                                                     filter_size=3, is_training=self.is_training,
                                                                     nonlin_f=self.nonlin_f, name_postfix='2_2')
@@ -73,7 +72,7 @@ class VGG16(NetworkBase):
             conv_3_1, batch_3_1, activ_3_1 = self._conv_bn_layer_tf(pooling_2, n_filters=self.num_filters, filter_scale=4,
                                                                     filter_size=3, is_training=self.is_training,
                                                                     nonlin_f=self.nonlin_f, name_postfix='3_1')
-            conv_3_2, batch_3_2, activ_3_2 = self._conv_bn_layer_tf(activ_3_1, n_filters=self.num_filters,
+            conv_3_2, batch_3_2, activ_3_2 = self._conv_bn_layer_tf(conv_3_1, n_filters=self.num_filters,
                                                                     filter_scale=4,
                                                                     filter_size=3, is_training=self.is_training,
                                                                     nonlin_f=self.nonlin_f, name_postfix='3_2')
@@ -88,7 +87,7 @@ class VGG16(NetworkBase):
             conv_4_1, batch_4_1, activ_4_1 = self._conv_bn_layer_tf(pooling_3, n_filters=self.num_filters, filter_scale=8,
                                                                     filter_size=3, is_training=self.is_training,
                                                                     nonlin_f=self.nonlin_f, name_postfix='4_1')
-            conv_4_2, batch_4_2, activ_4_2 = self._conv_bn_layer_tf(activ_4_1, n_filters=self.num_filters,
+            conv_4_2, batch_4_2, activ_4_2 = self._conv_bn_layer_tf(conv_4_1, n_filters=self.num_filters,
                                                                     filter_scale=8,
                                                                     filter_size=3, is_training=self.is_training,
                                                                     nonlin_f=self.nonlin_f, name_postfix='4_2')
@@ -124,16 +123,18 @@ class VGG16(NetworkBase):
 
 class VGG16_pt(NetworkBase, nn.Module):
     def __init__(self, network_type, loss, accuracy, lr, framework, training, trainable_layers=None, num_filters=16,
-                 optimizer='adam', nonlin='elu', num_classes=2, dropout=0.25):
+                 optimizer='adam', nonlin='elu', num_classes=2):
         NetworkBase.__init__(self, network_type=network_type, loss=loss, accuracy=accuracy, framework=framework, lr=lr,
-                             training=training,
-                             trainable_layers=trainable_layers, num_filters=num_filters, optimizer=optimizer,
-                             nonlin=nonlin,
-                             num_classes=num_classes, dropout=dropout)
+                             training=training, trainable_layers=trainable_layers, num_filters=num_filters,
+                             optimizer=optimizer, nonlin=nonlin, num_classes=num_classes)
         nn.Module.__init__(self)
 
+        dimensions = 3
+        if self.network_type ==' MNIST':
+            dimensions = 1
+
         # Conv 1
-        self.conv_1_1 = self._conv_bn_layer_pt(3, self.num_filters, filter_size=3, stride=1, is_training=True,
+        self.conv_1_1 = self._conv_bn_layer_pt(dimensions, self.num_filters, filter_size=3, stride=1, is_training=True,
                                                nonlin_f=self.nonlin_f, padding=1, name_postfix='1_1')
         self.conv_1_2 = self._conv_bn_layer_pt(num_filters, self.num_filters, filter_size=3, stride=1, is_training=True,
                                                nonlin_f=self.nonlin_f, padding=1, name_postfix='1_1')
@@ -185,11 +186,9 @@ class VGG16_pt(NetworkBase, nn.Module):
         self.pool_5 = nn.MaxPool2d(kernel_size=2, stride=2)
 
         # Output
-        self.fc_1 = nn.Linear(4096, 4096)
-        self.n_1 = self.nonlin_f()
-        self.fc_2 = nn.Linear(4096, 4096)
-        self.n_2 = self.nonlin_f()
-        self.out = nn.Linear(4096, self.num_classes)
+        self.fc_1 = nn.Linear(512, 64)
+        self.fc_2 = nn.Linear(64, 64)
+        self.out = nn.Linear(64, self.num_classes)
 
     def forward(self, X):
         x = self.conv_1_1(X)
@@ -216,10 +215,9 @@ class VGG16_pt(NetworkBase, nn.Module):
         x = self.pool_5(x)
 
         x = x.view(x.size(0), -1)
+
         x = self.fc_1(x)
-        x = self.n_1(x)
         x = self.fc_2(x)
-        x = self.n_2(x)
         x = self.out(x)
 
         return x
