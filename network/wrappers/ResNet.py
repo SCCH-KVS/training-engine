@@ -48,21 +48,13 @@ class ResNet(NetworkBase):
         :return:    network
         """
 
-
-        # Identity Block
-        # convolutional block
-
-
-        # batch normalization
-
         # Stage 1
         with tf.name_scope('s_stage_1'):
-            conv_1_1, batch_1_1, activ_1_1 = self._conv_bn_layer_tf(X, n_filters=self.num_filters, filter_size=3,
+            conv_1_1, batch_1_1, activ_1_1 = self._conv_bn_layer_tf(X, n_filters=self.num_filters, filter_size=7,
                                                                     is_training=self.is_training,
                                                                     nonlin_f=self.nonlin_f,
                                                                     name_postfix='1_1')
-            batch_norm_1 = tf.layers.batch_normalization(conv_1_1, axis=3)
-            pooling_1 = tf.layers.max_pooling2d(batch_norm_1, pool_size=3, strides=2, padding='valid', name='pooling_1')
+            pooling_1 = tf.layers.max_pooling2d(activ_1_1, pool_size=3, strides=2, padding='valid', name='pooling_1')
             self.nets.extend([conv_1_1])
 
         # Stage 2
@@ -78,7 +70,9 @@ class ResNet(NetworkBase):
             conv_3_3 = self._identity_block(conv_3_2, filters=[128, 128, 512], i=33)
             conv_3_4 = self._identity_block(conv_3_3,  filters=[128, 128, 512], i=34)
 
+
         # Stage 4
+        '''
         with tf.name_scope('s_stage_4'):
             conv_4_1 = self._convolutional_block(conv_3_4, filters=[256, 256, 1024], i=41)
             conv_4_2 = self._identity_block(conv_4_1, filters=[256, 256, 1024], i=42)
@@ -86,10 +80,20 @@ class ResNet(NetworkBase):
             conv_4_4 = self._identity_block(conv_4_3,  filters=[256, 256, 1024], i=44)
             conv_4_5 = self._identity_block(conv_4_4,  filters=[256, 256, 1024], i=45)
             conv_4_6 = self._identity_block(conv_4_5, filters=[256, 256, 1024], i=46)
+        '''
+
+        # Stage 5
+        '''
+        with tf.name_scope('s_stage_5'):
+            conv_5_1 = self._convolutional_block(conv_4_6, filters=[512, 512, 2048], i=51)
+            conv_5_2 = self._identity_block(conv_5_1, filters=[512, 512, 2048], i=52)
+            conv_5_3 = self._identity_block(conv_5_2, filters=[512, 512, 2048], i=53)
+        '''
 
         # Output Layer
         with tf.name_scope('s_outputs'):
-            pooling_2 = tf.layers.average_pooling2d(conv_4_6, pool_size=2, strides=2, padding='same', name='pooling_2')
+            pooling_2 = tf.layers.average_pooling2d(conv_3_4, pool_size=2, strides=2, padding='same', name='pooling_2')
+            print(pooling_2)
             flat = tf.layers.flatten(pooling_2, name='flatten')
             output_p = tf.layers.dense(flat, units=self.num_classes, activation='softmax', name='output')
         return output_p
@@ -98,57 +102,51 @@ class ResNet(NetworkBase):
         # Retrieve Filters
         F1, F2, F3 = filters
 
-        # Save the input value
-        #x_shortcut = X
-
         conv_2_1, batch_2_1, activ_2_1 = self._conv_bn_layer_tf(X, n_filters=F1, filter_size=3,
                                                                 is_training=self.is_training, nonlin_f=self.nonlin_f,
                                                                 name_postfix='1_1'+str(i))
-        batch_norm_1 = tf.layers.batch_normalization(conv_2_1, axis=3)
 
-        conv_2_2, batch_2_2, activ_2_2 = self._conv_bn_layer_tf(batch_norm_1, n_filters=F2, filter_size=3,
+        conv_2_2, batch_2_2, activ_2_2 = self._conv_bn_layer_tf(activ_2_1, n_filters=F2, filter_size=3,
                                                                 is_training=self.is_training, nonlin_f=self.nonlin_f,
                                                                 name_postfix='1_2'+str(i))
-        batch_norm_2 = tf.layers.batch_normalization(conv_2_2, axis=3)
 
-        conv_2_3, batch_2_3, activ_2_3 = self._conv_bn_layer_tf(batch_norm_2, n_filters=F3, filter_size=3,
+        conv_2_3, batch_2_3, activ_2_3 = self._conv_bn_layer_tf(activ_2_2, n_filters=F3, filter_size=3,
                                                                 is_training=self.is_training, nonlin_f=self.nonlin_f,
                                                                 name_postfix='1_3'+str(i))
-        batch_norm_3 = tf.layers.batch_normalization(conv_2_3, axis=3)
 
         self.nets.extend([conv_2_1, conv_2_2, conv_2_3])
-        return batch_norm_3
+        return activ_2_3
 
     def _convolutional_block(self, X, filters, i):
         # Retrieve Filters
         F1, F2, F3 = filters
 
         # Save the input value
-        #x_shortcut = X
+        x_shortcut = X
 
         ##### MAIN PATH #####
         conv_2_1, batch_2_1, activ_2_1 = self._conv_bn_layer_tf(X, n_filters=F1, filter_size=3,
                                                                 is_training=self.is_training, nonlin_f=self.nonlin_f,
                                                                 name_postfix='1_1'+str(i))
-        batch_norm_1 = tf.layers.batch_normalization(conv_2_1, axis=3)
 
-        conv_2_2, batch_2_2, activ_2_2 = self._conv_bn_layer_tf(batch_norm_1, n_filters=F2, filter_size=3,
+        conv_2_2, batch_2_2, activ_2_2 = self._conv_bn_layer_tf(activ_2_1, n_filters=F2, filter_size=3,
                                                                 is_training=self.is_training, nonlin_f=self.nonlin_f,
                                                                 name_postfix='1_2'+str(i))
-        batch_norm_2 = tf.layers.batch_normalization(conv_2_2, axis=3)
 
-        conv_2_3, batch_2_3, activ_2_3 = self._conv_bn_layer_tf(batch_norm_2, n_filters=F3, filter_size=3,
+        conv_2_3, batch_2_3, activ_2_3 = self._conv_bn_layer_tf(activ_2_2, n_filters=F3, filter_size=3,
                                                                 is_training=self.is_training, nonlin_f=self.nonlin_f,
                                                                 name_postfix='1_3'+str(i))
-        batch_norm_3 = tf.layers.batch_normalization(conv_2_3, axis=3)
 
         ##### SHORTCUT PATH ####
-        #x_shortcut = self._conv_bn_layer_tf(x_shortcut, n_filters=F3, filter_size=3, is_training=self.is_training,
-        #                                    nonlin_f=self.nonlin_f, name_postfix='1_4'+str(i))
-        #x_shortcut = tf.layers.batch_normalization(x_shortcut, axis=3)
+        conv_2_4, batch_2_4, activ_2_4 = self._conv_bn_layer_tf(x_shortcut, n_filters=F3, filter_size=3,
+                                                                 is_training=self.is_training,
+                                                                 nonlin_f=self.nonlin_f,
+                                                                 name_postfix='1_4'+str(i))
 
-        self.nets.extend([conv_2_1, conv_2_2, conv_2_3])
-        return batch_norm_3
+        batch_2_3 += batch_2_4
+
+        self.nets.extend([conv_2_1, conv_2_2, conv_2_3, conv_2_4])
+        return tf.nn.relu(batch_2_3)
 
 
 class ResNet_pt(NetworkBase, nn.Module):
