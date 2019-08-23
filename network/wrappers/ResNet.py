@@ -70,7 +70,6 @@ class ResNet(NetworkBase):
             conv_3_2 = self._identity_block(pooling_2,  filters=[128, 128], i=32)
             conv_3_3 = self._identity_block(conv_3_2, filters=[128, 128], i=33)
 
-
         # Stage 4
         with tf.name_scope('s_stage_4'):
             conv_4_1 = self._convolutional_block(conv_3_3, filters=[256, 256], i=41)
@@ -143,7 +142,73 @@ class ResNet_pt(NetworkBase, nn.Module):
                              num_classes=num_classes)
         nn.Module.__init__(self)
 
+
+        # Stage 1
+        self.conv_1_1 = self._conv_bn_layer_pt(3, 64, filter_size=3, stride=1, is_training=True,
+                                               nonlin_f=self.nonlin_f, padding=1, name_postfix='1_1')
+        self.pool_1 = nn.MaxPool2d(kernel_size=3, stride=2)
+
+        # Stage 2
+        self.layer1_2 = self._identityblock([64, 64], 1, 12)
+        self.layer1_3 = self._identityblock([64, 64], 1, 13)
+        self.pool_2 = nn.MaxPool2d(kernel_size=3, stride=2)
+
+        # Stage 3
+        self.layer2_2 = self._identityblock([64, 128], 2, 22)
+        self.layer2_3 = self._identityblock([128, 128], 2, 23)
+        self.pool_3 = nn.MaxPool2d(kernel_size=3, stride=2)
+
+        # Stage 4
+        self.layer3_2 = self._identityblock([128, 128], 2, 32)
+        self.layer3_3 = self._identityblock([128, 128], 2, 33)
+        self.pool_4 = nn.MaxPool2d(kernel_size=3, stride=2)
+
+        # Stage 5
+        self.layer4_2 = self._identityblock([128, 128], 2, 42)
+        self.layer4_3 = self._identityblock([128, 128], 2, 43)
+
+        # Output
+        self.pool_5 = nn.AvgPool2d(kernel_size=2, stride=2)
+        self.out = nn.Linear(128, self.num_classes)
+
+    def _convolutionalblock(self):
+        return self
+
+    def _identityblock(self, filters, stride, i):
+        in_no, out_no = filters
+
+        return self._conv_bn_layer_pt(in_no, out_no, filter_size=3, stride=stride, is_training=True,
+                                                   nonlin_f=self.nonlin_f, padding=1,
+                                                   name_postfix='1_1'+str(i))
+
     def forward(self, X):
 
+        # Stage 1
+        x = self.conv_1_1(X)
+        x = self.pool_1(x)
 
-        return X
+        # Stage 2
+        x = self.layer1_2(x)
+        x = self.layer1_3(x)
+        x = self.pool_2(x)
+
+        # Stage 3
+        x = self.layer2_2(x)
+        x = self.layer2_3(x)
+        #x = self.pool_3(x)
+
+        # Stage 4
+        x = self.layer3_2(x)
+        x = self.layer3_3(x)
+        #x = self.pool_4(x)
+
+        # Stage 5
+        #x = self.layer4_2(x)
+        #x = self.layer4_3(x)
+        #x = self.pool_5(x)
+        #print(x.shape)
+
+        x = x.view(x.size(0), -1)
+        x = self.out(x)
+
+        return x

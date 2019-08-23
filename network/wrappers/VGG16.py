@@ -23,7 +23,7 @@ from network.wrappers.NetworkBase import NetworkBase
 
 class VGG16(NetworkBase):
     def __init__(self, network_type, loss, accuracy, lr, framework, training, trainable_layers=None, num_filters=64,
-                 optimizer='adam', nonlin='elu', num_classes=2):
+                 optimizer='adam', nonlin='elu', num_classes=2, dropout=0.25):
         """
         VGG16 Convolutional Neural Network constructor
         :param loss:        used loss function
@@ -36,7 +36,7 @@ class VGG16(NetworkBase):
         """
         super().__init__(network_type=network_type, loss=loss, accuracy=accuracy, framework=framework, lr=lr, training=training,
                              trainable_layers=trainable_layers, num_filters=num_filters, optimizer=optimizer, nonlin=nonlin,
-                             num_classes=num_classes)
+                             num_classes=num_classes, dropout=dropout)
         self.weights, self.biases, self.nets = [], [], []
 
     def build_net(self, X):
@@ -51,35 +51,35 @@ class VGG16(NetworkBase):
                                                                     is_training=self.is_training,
                                                                     nonlin_f=self.nonlin_f,
                                                                     name_postfix='1_1')
-            conv_1_2, batch_1_2, activ_1_2 = self._conv_bn_layer_tf(conv_1_1, n_filters=self.num_filters,
+            conv_1_2, batch_1_2, activ_1_2 = self._conv_bn_layer_tf(activ_1_1, n_filters=self.num_filters,
                                                                     filter_size=3, is_training=self.is_training,
                                                                     nonlin_f=self.nonlin_f, name_postfix='1_2')
-            pooling_1 = tf.layers.max_pooling2d(conv_1_2, pool_size=2, strides=2, padding='same', name='pooling_1')
+            pooling_1 = tf.layers.max_pooling2d(activ_1_2, pool_size=2, strides=2, padding='same', name='pooling_1')
             self.nets.extend([conv_1_1, conv_1_2])
 
         with tf.name_scope('s_conv_2'):
             conv_2_1, batch_2_1, activ_2_1 = self._conv_bn_layer_tf(pooling_1, n_filters=self.num_filters, filter_scale=2,
                                                                     filter_size=3, is_training=self.is_training,
                                                                     nonlin_f=self.nonlin_f, name_postfix='2_1')
-            conv_2_2, batch_2_2, activ_2_2 = self._conv_bn_layer_tf(conv_2_1, n_filters=self.num_filters,
+            conv_2_2, batch_2_2, activ_2_2 = self._conv_bn_layer_tf(activ_2_1, n_filters=self.num_filters,
                                                                     filter_scale=2,
                                                                     filter_size=3, is_training=self.is_training,
                                                                     nonlin_f=self.nonlin_f, name_postfix='2_2')
-            pooling_2 = tf.layers.max_pooling2d(conv_2_2, pool_size=2, strides=2, padding='same', name='pooling_2')
+            pooling_2 = tf.layers.max_pooling2d(activ_2_2, pool_size=2, strides=2, padding='same', name='pooling_2')
             self.nets.extend([conv_2_1, conv_2_2])
 
         with tf.name_scope('s_conv_3'):
             conv_3_1, batch_3_1, activ_3_1 = self._conv_bn_layer_tf(pooling_2, n_filters=self.num_filters, filter_scale=4,
                                                                     filter_size=3, is_training=self.is_training,
                                                                     nonlin_f=self.nonlin_f, name_postfix='3_1')
-            conv_3_2, batch_3_2, activ_3_2 = self._conv_bn_layer_tf(conv_3_1, n_filters=self.num_filters,
+            conv_3_2, batch_3_2, activ_3_2 = self._conv_bn_layer_tf(activ_3_1, n_filters=self.num_filters,
                                                                     filter_scale=4,
                                                                     filter_size=3, is_training=self.is_training,
                                                                     nonlin_f=self.nonlin_f, name_postfix='3_2')
             conv_3_3, batch_3_3, activ_3_3 = self._conv_bn_layer_tf(conv_3_2, n_filters=self.num_filters, filter_scale=4,
                                                                     filter_size=3, is_training=self.is_training,
                                                                     nonlin_f=self.nonlin_f, name_postfix='3_3')
-            pooling_3 = tf.layers.max_pooling2d(conv_3_3, pool_size=2, strides=2, padding='same', name='pooling_3')
+            pooling_3 = tf.layers.max_pooling2d(activ_3_3, pool_size=2, strides=2, padding='same', name='pooling_3')
 
             self.nets.extend([conv_3_1, conv_3_2, conv_3_3])
 
@@ -87,14 +87,14 @@ class VGG16(NetworkBase):
             conv_4_1, batch_4_1, activ_4_1 = self._conv_bn_layer_tf(pooling_3, n_filters=self.num_filters, filter_scale=8,
                                                                     filter_size=3, is_training=self.is_training,
                                                                     nonlin_f=self.nonlin_f, name_postfix='4_1')
-            conv_4_2, batch_4_2, activ_4_2 = self._conv_bn_layer_tf(conv_4_1, n_filters=self.num_filters,
+            conv_4_2, batch_4_2, activ_4_2 = self._conv_bn_layer_tf(activ_4_1, n_filters=self.num_filters,
                                                                     filter_scale=8,
                                                                     filter_size=3, is_training=self.is_training,
                                                                     nonlin_f=self.nonlin_f, name_postfix='4_2')
             conv_4_3, batch_4_3, activ_4_3 = self._conv_bn_layer_tf(conv_4_2, n_filters=self.num_filters, filter_scale=8,
                                                                   filter_size=3, is_training=self.is_training,
                                                                     nonlin_f=self.nonlin_f, name_postfix='4_3')
-            pooling_4 = tf.layers.max_pooling2d(conv_4_3, pool_size=2, strides=2, padding='same', name='pooling_4')
+            pooling_4 = tf.layers.max_pooling2d(activ_4_3, pool_size=2, strides=2, padding='same', name='pooling_4')
 
             self.nets.extend([conv_4_1, conv_4_2, conv_4_3])
 
@@ -109,16 +109,19 @@ class VGG16(NetworkBase):
             conv_5_3, batch_5_3, activ_5_3 = self._conv_bn_layer_tf(conv_5_2, n_filters=self.num_filters, filter_scale=8,
                                                                     filter_size=3, is_training=self.is_training,
                                                                     nonlin_f=self.nonlin_f, name_postfix='5_3')
-            pooling_5 = tf.layers.max_pooling2d(conv_5_3, pool_size=2, strides=2, padding='same', name='pooling_5')
+            pooling_5 = tf.layers.max_pooling2d(activ_5_3, pool_size=2, strides=2, padding='same', name='pooling_5')
 
             self.nets.extend([conv_5_1, conv_5_2, conv_5_3])
 
         with tf.name_scope('s_outputs'):
             flat = tf.layers.flatten(pooling_5, name='flatten')
-            fc_1 = tf.layers.dense(flat, units=64, activation=self.nonlin_f, name='fc_1')
-            fc_2 = tf.layers.dense(fc_1, units=64, activation=self.nonlin_f, name='fc_2')
-            output_p = tf.layers.dense(fc_2, units=self.num_classes, activation='softmax', name='output')
-        return output_p
+            drop_5 = tf.layers.dropout(flat, rate=self.dropout, name='drop_5')
+            fc_1 = tf.layers.dense(drop_5, units=64, activation=self.nonlin_f, name='fc_1')
+            drop_6 = tf.layers.dropout(fc_1, rate=self.dropout, name='drop_6')
+            fc_2 = tf.layers.dense(drop_6, units=64, activation=self.nonlin_f, name='fc_2')
+            output = tf.layers.dense(fc_2, units=self.num_classes, activation='softmax', name='output')
+            #self.nets.append(output)
+        return output
 
 
 class VGG16_pt(NetworkBase, nn.Module):
