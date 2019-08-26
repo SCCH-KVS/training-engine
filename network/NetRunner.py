@@ -84,7 +84,19 @@ class NetRunner:
         self.cross_val = args.cross_val
         self.experiment_path = args.experiment_path
         self.chpnt2load = args.chpnt2load
+        self.hyperband = args.hyperband
 
+        if args.hyperband:
+            self.halving_proportion = args.halving_proportion
+            self.max_amount_resources = args.max_amount_resources
+            self.lr_range = args.lr_range
+            self.lr_decay_range = args.lr_decay_range
+            self.ref_steps_range = args.ref_steps_range
+            self.ref_patience_range = args.ref_patience_range
+            self.batch_size_range = args.batch_size_range
+            self.loss_range = args.loss_range
+            self.accuracy_range = args.accuracy_range
+            self.optimizer_range = args.optimizer_range
         if not self.is_training:
             self.class_labels = args.class_labels
         if args.data_set:

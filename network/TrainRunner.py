@@ -19,6 +19,7 @@ import os
 import time
 import h5py
 import json
+import math
 import tf2onnx
 import numpy as np
 import tensorflow as tf
@@ -35,7 +36,6 @@ import torch
 from torch.autograd import Variable
 from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR
 import torch.onnx as torch_onnx
-
 
 
 class TrainRunner(NetRunner):
@@ -57,8 +57,12 @@ class TrainRunner(NetRunner):
         if self.framework == 'tensorflow':
             os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
             self.build_tensorflow_pipeline()
-            valid_loss_final = self._run_tensorflow_pipeline()
-            return valid_loss_final
+            if self.hyperband:
+                self._run_hyperband_tensorflow()
+                return 0
+            else:
+                valid_loss_final = self._run_tensorflow_pipeline()
+                return valid_loss_final
         elif self.framework == 'pytorch':
             self.build_pytorch_pipeline()
             valid_loss_final =self._run_pytorch_pipeline()
@@ -540,3 +544,26 @@ class TrainRunner(NetRunner):
             print('Done')
             h5_file.close()
             return prev_loss
+
+
+    def _run_hyperband_tensorflow(self):
+        print("run pipeline")
+        smax = int(math.log(self.max_amount_resources, self.halving_proportion))  # default 4
+        #budget = (smax+1)*self.max_amount_resources  # default 85
+
+        for s in range(smax, -1, -1):
+            r = int(self.max_amount_resources * (self.halving_proportion ** -s))
+            n = int(np.floor((smax + 1) / (s + 1)) * self.halving_proportion ** s)
+            T = self._get_random_parameter_configurations(n)
+            for i in range(0, s+1):
+                # TODO train models, get loss
+                # TODO return top performing models, to next i round
+                ni = int(n * (self.halving_proportion ** -i))
+                ri = int(r*(self.halving_proportion**i))
+                #print("{}: {} : {}: {} : {}: {} : {}: {}".format("Bracket", s, "Round", i, "Ni", ni, "Ri", ri))
+
+
+
+    #TODO return random sets of hyperparameters
+    def _get_random_parameter_configurations(self, no):
+        return 0

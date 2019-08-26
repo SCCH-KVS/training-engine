@@ -92,6 +92,19 @@ class ConfigFlags:
                             type=str)
         parser.add_argument('--multi_task', help="multiple task, i.e. different loss functions",
                             type=bool)
+        parser.add_argument('--hyperband', help='Enables hyperband parameter optimization', type=bool)
+        parser.add_argument('--halving_proportion', help='Proportion discarded in each round', type=int, default=3)
+        parser.add_argument('--max_amount_resources', help='Max amount of epochs', type=int, default=81)
+        parser.add_argument('--lr_range', help='Range of possible learning rates', type=list, default=[-1])
+        parser.add_argument('--lr_decay_range', help='Range of possible learning rate decays', type=list, default=[-1])
+        parser.add_argument('--ref_steps_range', help='Range of possible refinement steps', type=list, default=[-1])
+        parser.add_argument('--ref_patience_range', help='Range of possible refinment patience',
+                            type=list, default=[-1])
+        parser.add_argument('--batch_size_range', help='Range of possible batch sizes', type=list, default=[-1])
+        parser.add_argument('--loss_range', help='Range of possible losses', type=list, default=[-1])
+        parser.add_argument('--accuracy_range', help='Range of possible accuracies', type=list, default=[-1])
+        parser.add_argument('--optimizer_range', help='Range of possible optimizers', type=list, default=[-1])
+
         self.args = parser.parse_args()
 
     def return_flags(self):
