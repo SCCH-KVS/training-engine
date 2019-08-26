@@ -135,80 +135,71 @@ class ResNet(NetworkBase):
 
 
 class ResNet_pt(NetworkBase, nn.Module):
-    def __init__(self, network_type, loss, accuracy, lr, framework,  training, trainable_layers=None, num_filters=16,
+    def __init__(self, network_type, loss, accuracy, lr, framework,  training, trainable_layers=None, num_filters=64,
                  optimizer='adam', nonlin='elu', num_classes=2):
         NetworkBase.__init__(self, network_type=network_type, loss=loss, accuracy=accuracy, framework=framework, lr=lr, training=training,
                              trainable_layers=trainable_layers, num_filters=num_filters, optimizer=optimizer, nonlin=nonlin,
                              num_classes=num_classes)
         nn.Module.__init__(self)
+        self.in_channels = 64
 
+        self.conv = self._conv_layer_pt(3, 64)
+        self.bn = nn.BatchNorm2d(64)
+        self.relu = self.nonlin_f()
+        self.layer1 = self._make_layer(ResidualBlock, 64, 2)
+        self.avg_pool_1 = nn.AvgPool2d(2)
+        self.layer2 = self._make_layer(ResidualBlock, 128, 2)
+        self.avg_pool_2 = nn.AvgPool2d(2)
+        self.layer3 = self._make_layer(ResidualBlock, 256, 2)
+        self.avg_pool_3 = nn.AvgPool2d(2)
+        self.fc = nn.Linear(4096, num_classes)
 
-        # Stage 1
-        self.conv_1_1 = self._conv_bn_layer_pt(3, 64, filter_size=3, stride=1, is_training=True,
-                                               nonlin_f=self.nonlin_f, padding=1, name_postfix='1_1')
-        self.pool_1 = nn.MaxPool2d(kernel_size=3, stride=2)
-
-        # Stage 2
-        self.layer1_2 = self._identityblock([64, 64], 1, 12)
-        self.layer1_3 = self._identityblock([64, 64], 1, 13)
-        self.pool_2 = nn.MaxPool2d(kernel_size=3, stride=2)
-
-        # Stage 3
-        self.layer2_2 = self._identityblock([64, 128], 2, 22)
-        self.layer2_3 = self._identityblock([128, 128], 2, 23)
-        self.pool_3 = nn.MaxPool2d(kernel_size=3, stride=2)
-
-        # Stage 4
-        self.layer3_2 = self._identityblock([128, 128], 2, 32)
-        self.layer3_3 = self._identityblock([128, 128], 2, 33)
-        self.pool_4 = nn.MaxPool2d(kernel_size=3, stride=2)
-
-        # Stage 5
-        self.layer4_2 = self._identityblock([128, 128], 2, 42)
-        self.layer4_3 = self._identityblock([128, 128], 2, 43)
-
-        # Output
-        self.pool_5 = nn.AvgPool2d(kernel_size=2, stride=2)
-        self.out = nn.Linear(128, self.num_classes)
-
-    def _convolutionalblock(self):
-        return self
-
-    def _identityblock(self, filters, stride, i):
-        in_no, out_no = filters
-
-        return self._conv_bn_layer_pt(in_no, out_no, filter_size=3, stride=stride, is_training=True,
-                                                   nonlin_f=self.nonlin_f, padding=1,
-                                                   name_postfix='1_1'+str(i))
+    def _make_layer(self, block, out_channels, blocks, stride=1):
+        downsample = None
+        if (stride != 1) or (self.in_channels != out_channels):
+            downsample = nn.Sequential(self._conv_layer_pt(self.in_channels, out_channels, stride=stride),
+                                       nn.BatchNorm2d(out_channels))
+        layers = []
+        layers.append(block(self.in_channels, out_channels, stride, downsample))
+        self.in_channels = out_channels
+        for i in range(1, blocks):
+            layers.append(block(out_channels, out_channels))
+        return nn.Sequential(*layers)
 
     def forward(self, X):
-
-        # Stage 1
-        x = self.conv_1_1(X)
-        x = self.pool_1(x)
-
-        # Stage 2
-        x = self.layer1_2(x)
-        x = self.layer1_3(x)
-        x = self.pool_2(x)
-
-        # Stage 3
-        x = self.layer2_2(x)
-        x = self.layer2_3(x)
-        #x = self.pool_3(x)
-
-        # Stage 4
-        x = self.layer3_2(x)
-        x = self.layer3_3(x)
-        #x = self.pool_4(x)
-
-        # Stage 5
-        #x = self.layer4_2(x)
-        #x = self.layer4_3(x)
-        #x = self.pool_5(x)
-        #print(x.shape)
-
+        x = self.conv(X)
+        x = self.bn(x)
+        x = self.relu(x)
+        x = self.layer1(x)
+        x = self.avg_pool_1(x)
+        x = self.layer2(x)
+        x = self.avg_pool_2(x)
+        x = self.layer3(x)
+        x = self.avg_pool_3(x)
         x = x.view(x.size(0), -1)
-        x = self.out(x)
+        x = self.fc(x)
+        return x
 
+
+class ResidualBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, stride=1, downsample=None):
+        nn.Module.__init__(self)
+        self.conv1 = nn.Conv2d(in_channels, out_channels, 1, stride)
+        self.bn1 = nn.BatchNorm2d(out_channels)
+        self.relu = nn.ReLU()
+        self.conv2 = nn.Conv2d(out_channels, out_channels, 1, stride)
+        self.bn2 = nn.BatchNorm2d(out_channels)
+        self.downsample = downsample
+
+    def forward(self, X):
+        residual = X
+        x = self.conv1(X)
+        x = self.bn1(x)
+        x = self.relu(x)
+        x = self.conv2(x)
+        x = self.bn2(x)
+        if self.downsample:
+            residual = self.downsample(residual)
+        x += residual
+        x = self.relu(x)
         return x

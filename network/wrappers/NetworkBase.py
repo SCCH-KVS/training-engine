@@ -316,7 +316,7 @@ class NetworkBase:
                        padding=1, name_postfix='1_1'):
         m = nn.Sequential(
             nn.Conv2d(n_in, n_out, filter_size, stride, padding),
-            # nn.BatchNorm2d(n_out),
+            nn.BatchNorm2d(n_out),
             nonlin_f()
         )
         return m
@@ -325,6 +325,15 @@ class NetworkBase:
         # nonlin = nonlin_f(batch_norm)
         # return conv, batch_norm, nonlin
 
+    @staticmethod
+    def _conv_layer_pt(n_in, n_out, filter_size=3, stride=1, is_training=True, nonlin_f=None,
+                       padding=1, name_postfix='1_1'):
+        m = nn.Sequential(
+            nn.Conv2d(n_in, n_out, filter_size, stride, padding)
+        )
+        return m
+        # conv = nn.Conv2d(n_filters * filter_scale, input_layer, kernel_size=filter_size, stride=2)
+        # return conv
 
 
     @staticmethod
