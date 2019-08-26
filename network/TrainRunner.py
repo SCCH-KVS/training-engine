@@ -420,7 +420,7 @@ class TrainRunner(NetRunner):
                                                 self.task_type).to(self.device))
 
                     epoch_loss_train += loss.item()
-                    epoch_accur_train += (100*train_step_accuracy)/self.batch_size
+                    epoch_accur_train += train_step_accuracy/self.batch_size
 
                 for i in tqdm(valid_generator, total=valid_lim, unit=' steps', desc='Epoch {:d} valid'.format(epoch)):
                     total_recall_counter_valid += 1
@@ -435,7 +435,7 @@ class TrainRunner(NetRunner):
                                                 self.task_type).to(self.device))
 
                     epoch_loss_valid += loss.item()
-                    epoch_accur_valid += (100*valid_step_accuracy)/self.batch_size
+                    epoch_accur_valid += valid_step_accuracy/self.batch_size
 
                 train_aver_loss = epoch_loss_train / train_lim
                 valid_aver_loss = epoch_loss_valid / valid_lim
