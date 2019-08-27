@@ -22,6 +22,7 @@ import json
 import math
 import tf2onnx
 import numpy as np
+import random
 import tensorflow as tf
 from tqdm import tqdm
 # import tensorflow.contrib.slim as slim
@@ -30,7 +31,6 @@ from network.NetRunner import NetRunner
 from utils.BatchIterator import BatchIterator
 from utils.utils import log_loss_accuracy
 from utils.gradcam.GradCAM import grad_cam_plus_plus as gradcam
-
 
 import torch
 from torch.autograd import Variable
@@ -346,7 +346,6 @@ class TrainRunner(NetRunner):
 
         h5_file.close()
 
-
     def _run_pytorch_pipeline(self):
         h5_file = h5py.File(self.h5_data_file, 'r')
 
@@ -545,7 +544,6 @@ class TrainRunner(NetRunner):
             h5_file.close()
             return prev_loss
 
-
     def _run_hyperband_tensorflow(self):
         print("run pipeline")
         smax = int(math.log(self.max_amount_resources, self.halving_proportion))  # default 4
@@ -562,8 +560,22 @@ class TrainRunner(NetRunner):
                 ri = int(r*(self.halving_proportion**i))
                 #print("{}: {} : {}: {} : {}: {} : {}: {}".format("Bracket", s, "Round", i, "Ni", ni, "Ri", ri))
 
+    def _get_random_parameter_configurations(self, iterations):
 
+        final_config = []
 
-    #TODO return random sets of hyperparameters
-    def _get_random_parameter_configurations(self, no):
-        return 0
+        for c in range(0, iterations+1):
+            current_config = dict()
+
+            current_config['lr'] = np.random.uniform(self.lr_range[0], self.lr_range[1])
+            current_config['lr_decag'] = np.random.uniform(self.lr_decay_range[0], self.lr_decay_range[1])
+            current_config['ref_steps'] = random.randrange(self.ref_steps_range[0], self.ref_steps_range[1], 1)
+            current_config['ref_patience'] = random.randrange(self.ref_patience_range[0], self.ref_patience_range[1], 1)
+            current_config['batch_size'] = random.randrange(self.batch_size_range[0], self.batch_size_range[1], 1)
+            current_config['loss'] = random.choice(self.loss_range)
+            current_config['accuracy'] = random.choice(self.accuracy_range)
+            current_config['optimizer'] = random.choice(self.optimizer_range)
+
+            final_config.append(current_config)
+
+        return final_config
