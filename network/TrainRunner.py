@@ -56,17 +56,21 @@ class TrainRunner(NetRunner):
     def _initialize_training(self):
         if self.framework == 'tensorflow':
             os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-            self.build_tensorflow_pipeline()
             if self.hyperband:
-                self._run_hyperband_tensorflow()
-                return 0
+                best_configuration = self._run_hyperband()
+                return best_configuration
             else:
+                self.build_tensorflow_pipeline()
                 valid_loss_final = self._run_tensorflow_pipeline()
                 return valid_loss_final
         elif self.framework == 'pytorch':
-            self.build_pytorch_pipeline()
-            valid_loss_final =self._run_pytorch_pipeline()
-            return valid_loss_final
+            if self.hyperband:
+                best_configuration = self._run_hyperband()
+                return best_configuration
+            else:
+                self.build_pytorch_pipeline()
+                valid_loss_final =self._run_pytorch_pipeline()
+                return valid_loss_final
         else:
             raise ValueError('Framework is not supported')
 
@@ -346,6 +350,9 @@ class TrainRunner(NetRunner):
 
         h5_file.close()
 
+        if self.hyperband:
+            return train_aver_loss, epoch_acc_str_tr, valid_aver_loss, epoch_acc_str_val
+
     def _run_pytorch_pipeline(self):
         h5_file = h5py.File(self.h5_data_file, 'r')
 
@@ -542,33 +549,91 @@ class TrainRunner(NetRunner):
 
             print('Done')
             h5_file.close()
-            return prev_loss
 
-    def _run_hyperband_tensorflow(self):
-        print("run pipeline")
+            if self.hyperband:
+                return train_aver_loss, epoch_accur_train, valid_aver_loss, epoch_accur_valid
+            else:
+                return prev_loss
+
+    def _run_hyperband(self):
         smax = int(math.log(self.max_amount_resources, self.halving_proportion))  # default 4
-        #budget = (smax+1)*self.max_amount_resources  # default 85
+        best_loss_so_far = list()
+        cur_best_loss = 0
 
         for s in range(smax, -1, -1):
             r = int(self.max_amount_resources * (self.halving_proportion ** -s))
             n = int(np.floor((smax + 1) / (s + 1)) * self.halving_proportion ** s)
-            T = self._get_random_parameter_configurations(n)
+
+            set_of_configurations = self._get_random_parameter_configurations(n)
+
+            results = list()
             for i in range(0, s+1):
-                # TODO train models, get loss
-                # TODO return top performing models, to next i round
                 ni = int(n * (self.halving_proportion ** -i))
                 ri = int(r*(self.halving_proportion**i))
-                #print("{}: {} : {}: {} : {}: {} : {}: {}".format("Bracket", s, "Round", i, "Ni", ni, "Ri", ri))
+                for t in set_of_configurations:
+                    self._update_current_parameters(t, ri)
+                    if self.framework == 'tensorflow':
+                        self.build_tensorflow_pipeline()
+                        # train_aver_loss, epoch_acc_str_tr, valid_aver_loss, epoch_acc_str_val
+                        loss_and_acc = self._run_tensorflow_pipeline()
+                    else:
+                        self.build_pytorch_pipeline()
+                        loss_and_acc = self._run_pytorch_pipeline()
+                    intermediate_results = list()
+                    intermediate_results.append(loss_and_acc[0])
+                    intermediate_results.append(t)
+                    results.append(intermediate_results)
+
+                remaining_configs = round(ni/self.halving_proportion)
+                set_of_configurations, current_losses = self._get_top_configurations(results, remaining_configs)
+                cur_best_loss = current_losses[0]
+                print("{}: {} : {}: {} : {}: {} : {}: {}".format("Bracket", s, "Round", i, "Ni", ni, "Ri", ri))
+
+            if s == smax:
+                best_loss_so_far.append(cur_best_loss)
+                best_loss_so_far.append(set_of_configurations[0])
+            else:
+                if best_loss_so_far[0] > cur_best_loss:
+                    best_loss_so_far[0] = cur_best_loss
+                    best_loss_so_far[1] = set_of_configurations[0]
+
+        return best_loss_so_far
+
+    @staticmethod
+    def _get_top_configurations(results, remaining_configs):
+        new_configs = list()
+        current_losses = list()
+        results.sort()
+
+        if remaining_configs > 0:
+            results = results[:remaining_configs]
+            
+        for result in results:
+            new_configs.append(result[1])
+            current_losses.append(result[0])
+
+        return new_configs, current_losses
+
+    def _update_current_parameters(self, current_params, epochs):
+        self.learning_rate = current_params['lr']
+        self.lr_decay = current_params['lr_decay']
+        self.ref_steps = current_params['ref_steps']
+        self.ref_patience = current_params['ref_patience']
+        self.batch_size = current_params['batch_size']
+        self.loss = current_params['loss']
+        self.accuracy = current_params['accuracy']
+        self.optimizer = current_params['optimizer']
+        self.num_epochs = epochs
 
     def _get_random_parameter_configurations(self, iterations):
 
-        final_config = []
+        final_config = list()
 
-        for c in range(0, iterations+1):
+        for c in range(0, iterations):
             current_config = dict()
 
             current_config['lr'] = np.random.uniform(self.lr_range[0], self.lr_range[1])
-            current_config['lr_decag'] = np.random.uniform(self.lr_decay_range[0], self.lr_decay_range[1])
+            current_config['lr_decay'] = np.random.uniform(self.lr_decay_range[0], self.lr_decay_range[1])
             current_config['ref_steps'] = random.randrange(self.ref_steps_range[0], self.ref_steps_range[1], 1)
             current_config['ref_patience'] = random.randrange(self.ref_patience_range[0], self.ref_patience_range[1], 1)
             current_config['batch_size'] = random.randrange(self.batch_size_range[0], self.batch_size_range[1], 1)
