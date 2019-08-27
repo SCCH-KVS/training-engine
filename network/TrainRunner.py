@@ -342,7 +342,10 @@ class TrainRunner(NetRunner):
                                     # with open("{}/model.onnx".format(model_file_path), "wb") as f:
                                     #     f.write(model_proto.SerializeToString())
                                     # sess.close()
-                                    return prev_loss
+                                    if self.hyperband:
+                                        return train_aver_loss, epoch_acc_str_tr, valid_aver_loss, epoch_acc_str_val
+                                    else:
+                                        return prev_loss
                                     # break
                     gc.collect()
             coord.request_stop()
@@ -536,8 +539,10 @@ class TrainRunner(NetRunner):
                         torch_onnx.export(final_network, dummy_input, os.path.join(model_file_path, 'model.onnx'), verbose=False)
 
                         print('Done')
-
-                        return prev_loss
+                        if self.hyperband:
+                            return train_aver_loss, epoch_accur_train, valid_aver_loss, epoch_accur_valid
+                        else:
+                            return prev_loss
                 gc.collect()
             print("Finalizing training")
             final_network = torch.load(os.path.join(model_file_path, 'model.pth'))
@@ -556,22 +561,32 @@ class TrainRunner(NetRunner):
                 return prev_loss
 
     def _run_hyperband(self):
+        file = open(self.hyperband_path+"/"+str(self.timestamp)+".txt", "w")
         smax = int(math.log(self.max_amount_resources, self.halving_proportion))  # default 4
         best_loss_so_far = list()
         cur_best_loss = 0
+        final_results = list()
+        cur_results = list()
 
         for s in range(smax, -1, -1):
+            file.write("Bracket s="+str(s) + "\n\n")
+
             r = int(self.max_amount_resources * (self.halving_proportion ** -s))
             n = int(np.floor((smax + 1) / (s + 1)) * self.halving_proportion ** s)
 
             set_of_configurations = self._get_random_parameter_configurations(n)
+            print("Configurations:")
+            print(set_of_configurations)
 
             results = list()
             for i in range(0, s+1):
+                file.write("Iteration i=" + str(i) + "\n\n")
                 ni = int(n * (self.halving_proportion ** -i))
                 ri = int(r*(self.halving_proportion**i))
                 for t in set_of_configurations:
+                    file.write(str(t) + " Epochs: "+str(ri)+"\n")
                     self._update_current_parameters(t, ri)
+                    start_time = time.time()
                     if self.framework == 'tensorflow':
                         self.build_tensorflow_pipeline()
                         # train_aver_loss, epoch_acc_str_tr, valid_aver_loss, epoch_acc_str_val
@@ -579,14 +594,20 @@ class TrainRunner(NetRunner):
                     else:
                         self.build_pytorch_pipeline()
                         loss_and_acc = self._run_pytorch_pipeline()
+                    file.write("{} {} {} {} {} {} {} {} {} \n".format("Result:", "Train Loss:", loss_and_acc[0],
+                                                                      "Train Acc:", loss_and_acc[1], "Valid Loss:",
+                                                                      loss_and_acc[2], "Valid Acc:", loss_and_acc[3]))
+                    elapsed_time = time.time() - start_time
+                    file.write("Time: "+str(elapsed_time)+"\n")
                     intermediate_results = list()
-                    intermediate_results.append(loss_and_acc[0])
+                    intermediate_results.append(loss_and_acc[2])
                     intermediate_results.append(t)
                     results.append(intermediate_results)
 
                 remaining_configs = round(ni/self.halving_proportion)
-                set_of_configurations, current_losses = self._get_top_configurations(results, remaining_configs)
+                set_of_configurations, current_losses = self._get_top_configurations(results, remaining_configs, ri)
                 cur_best_loss = current_losses[0]
+
                 print("{}: {} : {}: {} : {}: {} : {}: {}".format("Bracket", s, "Round", i, "Ni", ni, "Ri", ri))
 
             if s == smax:
@@ -597,18 +618,20 @@ class TrainRunner(NetRunner):
                     best_loss_so_far[0] = cur_best_loss
                     best_loss_so_far[1] = set_of_configurations[0]
 
+        file.write("\nBest Result:\n" + str(best_loss_so_far))
+        file.close()
         return best_loss_so_far
 
     @staticmethod
-    def _get_top_configurations(results, remaining_configs):
+    def _get_top_configurations(results, remaining_configs, epochs):
         new_configs = list()
         current_losses = list()
         results.sort()
 
         if remaining_configs > 0:
             results = results[:remaining_configs]
-            
         for result in results:
+            result[1]['epochs'] = epochs
             new_configs.append(result[1])
             current_losses.append(result[0])
 

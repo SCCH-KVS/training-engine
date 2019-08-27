@@ -71,6 +71,9 @@ class DataParser:
     def get_tr_path(self):
         return self.tr_path
 
+    def get_hyperband_path(self):
+        return self.hyperband_path
+
     def _path_preparation(self):
         if self.experiment_path is None:
             self.experiment_path = os.path.join(os.path.dirname(os.path.abspath('utils')), "experiments")
@@ -80,7 +83,9 @@ class DataParser:
         if not os.path.exists(self.data_path):
             os.makedirs(self.data_path)
         self.info_path = os.path.join(self.experiment_path, "info_logs", self.data_set)
-
+        self.hyperband_path = os.path.join(self.experiment_path, "hyperband_logs", self.data_set)
+        if not os.path.exists(self.hyperband_path):
+            os.makedirs(self.hyperband_path)
         if self.is_training:
             if not os.path.exists(self.info_path):
                 os.makedirs(self.info_path)

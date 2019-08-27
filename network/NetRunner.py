@@ -136,7 +136,6 @@ class NetRunner:
         else:
             self.zero_center = None
 
-
         self._initialize_data()
 
     def _initialize_data(self):
@@ -150,6 +149,7 @@ class NetRunner:
             self.timestamp = data_parser.get_timestamp()
             self.ckpnt_path = data_parser.get_ckpnt_path()
             self.tr_path = data_parser.get_tr_path()
+            self.hyperband_path = data_parser.get_hyperband_path()
         else:
             self.inference_X, self.inference_y = data_parser.get_inference_data()
 
@@ -176,9 +176,6 @@ class NetRunner:
                 self._gt_data = tf.placeholder(tf.float32, shape=gt_shape, name='GT_train')
             else:
                 raise ValueError('Task not supported')
-
-
-
 
             queue = tf.FIFOQueue(self.data_size * self.num_epochs, [tf.float32, tf.float32], name='queue')
             self.enqueue_op = queue.enqueue([self._in_data, self._gt_data])
