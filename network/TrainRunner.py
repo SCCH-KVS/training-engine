@@ -69,7 +69,7 @@ class TrainRunner(NetRunner):
                 return best_configuration
             else:
                 self.build_pytorch_pipeline()
-                valid_loss_final =self._run_pytorch_pipeline()
+                valid_loss_final = self._run_pytorch_pipeline()
                 return valid_loss_final
         else:
             raise ValueError('Framework is not supported')
@@ -343,7 +343,7 @@ class TrainRunner(NetRunner):
                                     #     f.write(model_proto.SerializeToString())
                                     # sess.close()
                                     if self.hyperband:
-                                        return train_aver_loss, epoch_acc_str_tr, valid_aver_loss, epoch_acc_str_val
+                                        return valid_aver_loss, epoch_acc_str_val, train_aver_loss, epoch_acc_str_tr
                                     else:
                                         return prev_loss
                                     # break
@@ -354,7 +354,7 @@ class TrainRunner(NetRunner):
         h5_file.close()
 
         if self.hyperband:
-            return train_aver_loss, epoch_acc_str_tr, valid_aver_loss, epoch_acc_str_val
+            return valid_aver_loss, epoch_acc_str_val, train_aver_loss, epoch_acc_str_tr
 
     def _run_pytorch_pipeline(self):
         h5_file = h5py.File(self.h5_data_file, 'r')
@@ -540,7 +540,7 @@ class TrainRunner(NetRunner):
 
                         print('Done')
                         if self.hyperband:
-                            return train_aver_loss, epoch_accur_train, valid_aver_loss, epoch_accur_valid
+                            return valid_aver_loss, epoch_accur_valid, train_aver_loss, epoch_accur_train
                         else:
                             return prev_loss
                 gc.collect()
@@ -556,36 +556,45 @@ class TrainRunner(NetRunner):
             h5_file.close()
 
             if self.hyperband:
-                return train_aver_loss, epoch_accur_train, valid_aver_loss, epoch_accur_valid
+                return valid_aver_loss, epoch_accur_valid, train_aver_loss, epoch_accur_train
             else:
                 return prev_loss
 
     def _run_hyperband(self):
         file = open(self.hyperband_path+"/"+str(self.timestamp)+".txt", "w")
         smax = int(math.log(self.max_amount_resources, self.halving_proportion))  # default 4
-        best_loss_so_far = list()
-        cur_best_loss = 0
-        final_results = list()
-        cur_results = list()
-
+        best_result_so_far = list()
+        file.write("Hyperband parameters \n")
+        file.write("{}{} {}{} \n".format("Halving Proportion:", self.halving_proportion, "Max amount of rescources:",
+                                           self.max_amount_resources))
+        file.write("Hyperparameter ranges\n")
+        file.write("{}{} {}{} {}{} {}{} {}{} {}{} {}{} {}{} \n\n".format("Lr:", self.lr_range, "Lr deca:",
+                                                                         self.lr_decay_range, "Ref steps:",
+                                                                         self.ref_steps_range, "Ref patience:",
+                                                                         self.ref_patience_range, "Batch Size:",
+                                                                         self.batch_size_range, "Loss range:",
+                                                                         self.loss_range, "Accuracy Range:",
+                                                                         self.accuracy_range, "Optimizer Range:",
+                                                                         self.optimizer_range))
         for s in range(smax, -1, -1):
-            file.write("Bracket s="+str(s) + "\n\n")
+            file.write("Bracket s="+str(s) + "\n")
 
             r = int(self.max_amount_resources * (self.halving_proportion ** -s))
             n = int(np.floor((smax + 1) / (s + 1)) * self.halving_proportion ** s)
 
             set_of_configurations = self._get_random_parameter_configurations(n)
-            print("Configurations:")
-            print(set_of_configurations)
 
-            results = list()
             for i in range(0, s+1):
-                file.write("Iteration i=" + str(i) + "\n\n")
+                results = list()
+                file.write("\nIteration i=" + str(i) + "\n\n")
                 ni = int(n * (self.halving_proportion ** -i))
                 ri = int(r*(self.halving_proportion**i))
+
+                #print("{}: {} : {}: {} : {}: {} : {}: {}".format("Bracket", s, "Round", i, "Ni", ni, "Ri", ri))
+
                 for t in set_of_configurations:
+                    t = self._update_current_parameters(t, ri)
                     file.write(str(t) + " Epochs: "+str(ri)+"\n")
-                    self._update_current_parameters(t, ri)
                     start_time = time.time()
                     if self.framework == 'tensorflow':
                         self.build_tensorflow_pipeline()
@@ -594,48 +603,50 @@ class TrainRunner(NetRunner):
                     else:
                         self.build_pytorch_pipeline()
                         loss_and_acc = self._run_pytorch_pipeline()
-                    file.write("{} {} {} {} {} {} {} {} {} \n".format("Result:", "Train Loss:", loss_and_acc[0],
-                                                                      "Train Acc:", loss_and_acc[1], "Valid Loss:",
-                                                                      loss_and_acc[2], "Valid Acc:", loss_and_acc[3]))
+                    file.write("{} {} {} {} {} {} {} {} {} \n".format("Result:", "Valid Loss:", loss_and_acc[0],
+                                                                      "Valid Acc:", loss_and_acc[1], "Train Loss:",
+                                                                      loss_and_acc[2], "Train Acc:", loss_and_acc[3]))
                     elapsed_time = time.time() - start_time
                     file.write("Time: "+str(elapsed_time)+"\n")
                     intermediate_results = list()
-                    intermediate_results.append(loss_and_acc[2])
+                    intermediate_results.append(loss_and_acc)
                     intermediate_results.append(t)
                     results.append(intermediate_results)
 
                 remaining_configs = round(ni/self.halving_proportion)
-                set_of_configurations, current_losses = self._get_top_configurations(results, remaining_configs, ri)
-                cur_best_loss = current_losses[0]
+                set_of_configurations, current_results = self._get_top_configurations(results, remaining_configs)
 
-                print("{}: {} : {}: {} : {}: {} : {}: {}".format("Bracket", s, "Round", i, "Ni", ni, "Ri", ri))
+                if s == smax and i == 0:
+                    best_result_so_far.append(current_results[0])
+                    best_result_so_far.append(set_of_configurations[0])
 
-            if s == smax:
-                best_loss_so_far.append(cur_best_loss)
-                best_loss_so_far.append(set_of_configurations[0])
-            else:
-                if best_loss_so_far[0] > cur_best_loss:
-                    best_loss_so_far[0] = cur_best_loss
-                    best_loss_so_far[1] = set_of_configurations[0]
+                else:
+                    if best_result_so_far[0][0] > current_results[0][0]:
+                        best_result_so_far[0] = current_results[0]
+                        best_result_so_far[1] = set_of_configurations[0]
 
-        file.write("\nBest Result:\n" + str(best_loss_so_far))
+        file.write("\nBest Result:\n")
+        file.write("{} {} {} {} {} {} {} {} {} \n".format("Result:", "Valid Loss:", best_result_so_far[0][0],
+                                                          "Valid Acc:", best_result_so_far[0][1], "Train Loss:",
+                                                          best_result_so_far[0][2], "Train Acc:",
+                                                          best_result_so_far[0][3]))
+        file.write("{} {}".format("Configurations", best_result_so_far[1]))
         file.close()
-        return best_loss_so_far
+        return best_result_so_far
 
     @staticmethod
-    def _get_top_configurations(results, remaining_configs, epochs):
+    def _get_top_configurations(results, remaining_configs):
         new_configs = list()
-        current_losses = list()
+        current_results = list()
         results.sort()
 
         if remaining_configs > 0:
             results = results[:remaining_configs]
         for result in results:
-            result[1]['epochs'] = epochs
+            current_results.append(result[0])
             new_configs.append(result[1])
-            current_losses.append(result[0])
 
-        return new_configs, current_losses
+        return new_configs, current_results
 
     def _update_current_parameters(self, current_params, epochs):
         self.learning_rate = current_params['lr']
@@ -647,6 +658,8 @@ class TrainRunner(NetRunner):
         self.accuracy = current_params['accuracy']
         self.optimizer = current_params['optimizer']
         self.num_epochs = epochs
+        current_params['epochs'] = epochs
+        return current_params
 
     def _get_random_parameter_configurations(self, iterations):
 
@@ -657,9 +670,9 @@ class TrainRunner(NetRunner):
 
             current_config['lr'] = np.random.uniform(self.lr_range[0], self.lr_range[1])
             current_config['lr_decay'] = np.random.uniform(self.lr_decay_range[0], self.lr_decay_range[1])
-            current_config['ref_steps'] = random.randrange(self.ref_steps_range[0], self.ref_steps_range[1], 1)
-            current_config['ref_patience'] = random.randrange(self.ref_patience_range[0], self.ref_patience_range[1], 1)
-            current_config['batch_size'] = random.randrange(self.batch_size_range[0], self.batch_size_range[1], 1)
+            current_config['ref_steps'] = random.randint(self.ref_steps_range[0], self.ref_steps_range[1])
+            current_config['ref_patience'] = random.randint(self.ref_patience_range[0], self.ref_patience_range[1])
+            current_config['batch_size'] = random.randint(self.batch_size_range[0], self.batch_size_range[1])
             current_config['loss'] = random.choice(self.loss_range)
             current_config['accuracy'] = random.choice(self.accuracy_range)
             current_config['optimizer'] = random.choice(self.optimizer_range)
