@@ -42,7 +42,7 @@ class TrainRunner(NetRunner):
     def __init__(self, args=None, experiment_id=None):
         super().__init__(args, experiment_id)
 
-    def start_training(self):
+    def start_training(self, experiment_id=None):
         """
         Start Neural Network training
         :return:
@@ -50,14 +50,14 @@ class TrainRunner(NetRunner):
         # training initialisation
         # with tf.device('/cpu:0'):
         # self._initialize_data()
-        validation_scores = self._initialize_training()
+        validation_scores = self._initialize_training(experiment_id)
         return validation_scores
 
-    def _initialize_training(self):
+    def _initialize_training(self, experiment_id=None):
         if self.framework == 'tensorflow':
             os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
             if self.hyperband:
-                best_configuration = self._run_hyperband()
+                best_configuration = self._run_hyperband(experiment_id)
                 return best_configuration
             else:
                 self.build_tensorflow_pipeline()
@@ -560,7 +560,7 @@ class TrainRunner(NetRunner):
             else:
                 return prev_loss
 
-    def _run_hyperband(self):
+    def _run_hyperband(self, experiment_id):
         file = open(self.hyperband_path+"/"+str(self.timestamp)+".txt", "w")
         smax = int(math.log(self.max_amount_resources, self.halving_proportion))  # default 4
         best_result_so_far = list()
@@ -597,8 +597,8 @@ class TrainRunner(NetRunner):
                     file.write(str(t) + " Epochs: "+str(ri)+"\n")
                     start_time = time.time()
                     if self.framework == 'tensorflow':
+                        self.__init__(experiment_id=experiment_id)
                         self.build_tensorflow_pipeline()
-                        # train_aver_loss, epoch_acc_str_tr, valid_aver_loss, epoch_acc_str_val
                         loss_and_acc = self._run_tensorflow_pipeline()
                     else:
                         self.build_pytorch_pipeline()
@@ -654,8 +654,8 @@ class TrainRunner(NetRunner):
         self.ref_steps = current_params['ref_steps']
         self.ref_patience = current_params['ref_patience']
         self.batch_size = current_params['batch_size']
-        self.loss = current_params['loss']
-        self.accuracy = current_params['accuracy']
+        self.loss_type = current_params['loss']
+        self.accuracy_type = current_params['accuracy']
         self.optimizer = current_params['optimizer']
         self.num_epochs = epochs
         current_params['epochs'] = epochs

@@ -76,7 +76,6 @@ class NetRunner:
         self.num_filters = args.num_filters
         self.upconv = args.upconv
         self.nonlin = args.nonlin
-        self.loss_type = args.loss
         self.task_type = args.task_type
         self.long_summary = args.long_summary
         self.multi_task = args.multi_task
