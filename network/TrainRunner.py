@@ -597,7 +597,6 @@ class TrainRunner(NetRunner):
                     file.write(str(t) + " Epochs: "+str(ri)+"\n")
                     start_time = time.time()
                     if self.framework == 'tensorflow':
-                        self.__init__(experiment_id=experiment_id)
                         self.build_tensorflow_pipeline()
                         loss_and_acc = self._run_tensorflow_pipeline()
                     else:
@@ -649,7 +648,7 @@ class TrainRunner(NetRunner):
         return new_configs, current_results
 
     def _update_current_parameters(self, current_params, epochs):
-        self.learning_rate = current_params['lr']
+        self.lr = current_params['lr']
         self.lr_decay = current_params['lr_decay']
         self.ref_steps = current_params['ref_steps']
         self.ref_patience = current_params['ref_patience']
