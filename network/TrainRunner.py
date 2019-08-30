@@ -50,14 +50,14 @@ class TrainRunner(NetRunner):
         # training initialisation
         # with tf.device('/cpu:0'):
         # self._initialize_data()
-        validation_scores = self._initialize_training(experiment_id)
+        validation_scores = self._initialize_training()
         return validation_scores
 
-    def _initialize_training(self, experiment_id=None):
+    def _initialize_training(self):
         if self.framework == 'tensorflow':
             os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
             if self.hyperband:
-                best_configuration = self._run_hyperband(experiment_id)
+                best_configuration = self._run_hyperband()
                 return best_configuration
             else:
                 self.build_tensorflow_pipeline()
@@ -560,7 +560,7 @@ class TrainRunner(NetRunner):
             else:
                 return prev_loss
 
-    def _run_hyperband(self, experiment_id):
+    def _run_hyperband(self):
         file = open(self.hyperband_path+"/"+str(self.timestamp)+".txt", "w")
         smax = int(math.log(self.max_amount_resources, self.halving_proportion))  # default 4
         best_result_so_far = list()

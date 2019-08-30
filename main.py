@@ -29,7 +29,7 @@ def run(experiment_id):
     args = config.load_config()
     if args.training_mode:
         training = TrainRunner(experiment_id=experiment_id)
-        training.start_training(experiment_id=experiment_id)
+        training.start_training()
     else:
         inference = InferenceRunner(experiment_id=experiment_id)
         inference.start_inference()
