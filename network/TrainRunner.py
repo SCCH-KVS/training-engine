@@ -618,18 +618,21 @@ class TrainRunner(NetRunner):
                 if s == smax and i == 0:
                     best_result_so_far.append(current_results[0])
                     best_result_so_far.append(set_of_configurations[0])
-
+                    best_result_so_far.append(set_of_configurations[0]['epochs'])
                 else:
                     if best_result_so_far[0][0] > current_results[0][0]:
                         best_result_so_far[0] = current_results[0]
                         best_result_so_far[1] = set_of_configurations[0]
+                        best_result_so_far[2] = set_of_configurations[0]['epochs']
 
         file.write("\nBest Result:\n")
         file.write("{} {} {} {} {} {} {} {} {} \n".format("Result:", "Valid Loss:", best_result_so_far[0][0],
                                                           "Valid Acc:", best_result_so_far[0][1], "Train Loss:",
                                                           best_result_so_far[0][2], "Train Acc:",
                                                           best_result_so_far[0][3]))
-        file.write("{} {}".format("Configurations", best_result_so_far[1]))
+        del best_result_so_far[1]['epochs']
+        file.write("{} {} \n".format("Configurations", best_result_so_far[1]))
+        file.write("{} {}".format("Epochs", best_result_so_far[2]))
         file.close()
         return best_result_so_far
 
