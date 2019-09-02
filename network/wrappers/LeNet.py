@@ -17,6 +17,7 @@ import torch
 import torch.nn as nn
 import tensorflow as tf
 import torch.nn.functional as F
+from tensorflow.contrib.layers import flatten
 
 from network.wrappers.NetworkBase import NetworkBase
 
@@ -47,27 +48,35 @@ class LeNet(NetworkBase):
         :return:    network
         """
 
-        with tf.name_scope('s_conv_1'):
-            conv_1_1, batch_1_1, activ_1_1 = self._conv_bn_layer_tf(X, n_filters=6, filter_size=5,
-                                                                 is_training=self.is_training, nonlin_f=self.nonlin_f,
-                                                                 name_postfix='1_1')
-            pooling_1 = tf.layers.average_pooling2d(activ_1_1, pool_size=2, strides=2, padding='valid', name='pooling_1')
-            self.nets.extend([conv_1_1])
+        mu = 0
+        sigma = 0.1
+        #  Layer 1: Convolutional. Input = 32x32x1. Output = 28x28x6.
+        conv1 = self._conv_layer_tf(X, mu, sigma, padding='VALID', shape=[5, 5, 1, 6], filters=6, strides=[1, 1, 1, 1])
 
-        with tf.name_scope('s_conv_2'):
-            conv_2_1, batch_2_1, activ_2_1 = self._conv_bn_layer_tf(pooling_1, n_filters=16,
-                                                                 filter_size=5, is_training=self.is_training,
-                                                                 nonlin_f=self.nonlin_f, name_postfix='2_1')
-            pooling_2 = tf.layers.average_pooling2d(activ_2_1, pool_size=2, strides=3, padding='valid', name='pooling_2')
-            flat_1 = tf.layers.flatten(pooling_2, name='flatten')
-            self.nets.extend([conv_2_1])
+        # Pooling. Input = 28x28x6. Output = 14x14x6.
+        pool_1 = tf.nn.max_pool(conv1, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='VALID')
 
-        with tf.name_scope('s_outputs'):
-            fl_1 = tf.layers.dense(flat_1, units=120, activation='relu', name='fl_1')
-            fl_2 = tf.layers.dense(fl_1, units=84, activation='relu', name='fl_2')
-            output_p = tf.layers.dense(fl_2, units=self.num_classes, activation='softmax', name='output')
+        # Layer 2: Convolutional. Output = 10x10x16.
+        conv2 = self._conv_layer_tf(pool_1, mu, sigma, padding='VALID', shape=[5, 5, 6, 16], filters=16,
+                                    strides=[1, 1, 1, 1])
 
-        return output_p
+        # Pooling. Input = 10x10x16. Output = 5x5x16.
+        pool_2 = tf.nn.max_pool(conv2, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='VALID')
+
+        # Flatten. Input = 5x5x16. Output = 400.
+        fc1 = flatten(pool_2)
+
+        # Layer 3: Fully Connected. Input = 400. Output = 120.
+        fc1 = self._fully_connected_layer_tf(fc1, 400, 120, mu, sigma)
+        fc1 = tf.nn.relu(fc1)
+
+        # Layer 4: Fully Connected. Input = 120. Output = 84.
+        fc2 = self._fully_connected_layer_tf(fc1, 120, 84, mu, sigma)
+        fc2 = tf.nn.relu(fc2)
+
+        # TLayer 5: Fully Connected. Input = 84. Output = 10.
+        outputs = self._fully_connected_layer_tf(fc2, 84, 10, mu, sigma)
+        return outputs
 
 
 class LeNet_pt(NetworkBase, nn.Module):

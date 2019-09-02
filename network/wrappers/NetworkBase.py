@@ -203,29 +203,33 @@ class NetworkBase:
         if framework == "tensorflow":
             if key == 'softmax':
                 return softmax_tf
-            if key == 'sigmoid':
+            elif key == 'sigmoid':
                 return sigmoid_tf
-            if key == 'margin':
+            elif key == 'margin':
                 return margin_tf
-            if key == 'mse':
+            elif key == 'mse':
                 return mse_tf
-            if key == 'mse_loss':
+            elif key == 'mse_loss':
                 return mse_loss_tf
+            elif key == 'cross-entropy':
+                return cross_entropy_tf
             else:
                 raise ValueError('Unexpected metric function %s' % key)
         elif framework == "pytorch":
             if key == 'softmax':
                 return softmax_pt
-            if key == 'sigmoid':
+            elif key == 'sigmoid':
                 return sigmoid_pt
-            if key == 'margin':
+            elif key == 'margin':
                 return margin_pt
-            if key == 'mse':
+            elif key == 'mse':
                 return mse_pt
-            if key == 'mse_loss':
+            elif key == 'mse_loss':
                 return mse_loss_pt
             elif key == 'dice_jaccard':
                 return dice_loss
+            elif key == 'cross-entropy':
+                return softmax_pt
             else:
                 raise ValueError('Unexpected metric function %s' % key)
 
@@ -286,7 +290,7 @@ class NetworkBase:
 
     @staticmethod
     def _conv_bn_layer_tf(input_layer, n_filters, filter_scale=1, filter_size=3, is_training=True, nonlin_f=None,
-                       padding='same', name='s_conv_bn', name_postfix='1_1'):
+                       padding='same', name='s_conv_bn', name_postfix='1_1', strides=None):
         """
         Convolution layer with batch normalization
         :param input_layer:     input layer
@@ -303,13 +307,27 @@ class NetworkBase:
         with tf.name_scope(name + name_postfix):
             conv = tf.layers.conv2d(input_layer, filters=filter_scale * n_filters, kernel_size=filter_size,
                                     activation=None, padding=padding,
-                                    name='conv_' + name_postfix)
+                                    name='conv_' + name_postfix, strides=strides)
             batch_norm = tf.layers.batch_normalization(conv, training=is_training, fused=False, name='batch_' + name_postfix)
                 # weights, biases = NetworkBase.weights_and_biases(tf.shape(batch_norm), tf.shape(batch_norm)[-1])
                 # nonlin = nonlin_f(tf.matmul(batch_norm, weights) + biases, name='activation_' + name_postfix)
             nonlin = nonlin_f(conv, name='activation_' + name_postfix)
         return conv, batch_norm, nonlin
 
+    @staticmethod
+    def _conv_layer_tf(input_layer, mu, sigma, padding, shape, filters, strides):
+        conv1_w = tf.Variable(tf.truncated_normal(shape=shape, mean=mu, stddev=sigma))
+        conv1_b = tf.Variable(tf.zeros(filters))
+        conv1 = tf.nn.conv2d(input_layer, conv1_w, strides=strides, padding=padding) + conv1_b
+        conv1 = tf.nn.relu(conv1)
+        return conv1
+
+    @staticmethod
+    def _fully_connected_layer_tf(input_layer, input, output, mu, sigma):
+        fc1_w = tf.Variable(tf.truncated_normal(shape=(input, output), mean=mu, stddev=sigma))
+        fc1_b = tf.Variable(tf.zeros(output))
+        fc1 = tf.matmul(input_layer, fc1_w) + fc1_b
+        return fc1
 
     @staticmethod
     def _conv_bn_layer_pt(n_in, n_out, filter_size=3, stride=1, is_training=True, nonlin_f=None,

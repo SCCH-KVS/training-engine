@@ -212,6 +212,16 @@ def mse_loss_tf(y_pred, y_true):
     # return tf.losses.mean_squared_error(labels=y_true, predictions=y_pred)
 
 
+def cross_entropy_tf(y_pred, y_true):
+    """
+    Computes Softmax Cross Entropy
+    :param y_pred:
+    :param y_true:
+    :return:
+    """
+    return tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y_true, logits=y_pred))
+
+
 def percentage_tf(y_pred, y_true):
     """
     Computes percentage of correct predictions
@@ -268,9 +278,9 @@ def IoU_pt(y_pred, y_true):
     return out
 
 
-
 def dice_loss(y_pred, y_true, eps=1e-7):
     return DiceLoss_pt()(y_pred, y_true)
+
 
 class DiceLoss_pt(nn.Module):
     def __init__(self, weight=None, size_average=True):
@@ -286,6 +296,7 @@ class DiceLoss_pt(nn.Module):
         score = (2. * intersection + smooth) / (torch.sum(x) + torch.sum(y) + smooth)
         out = 1 - torch.sum(score) / num
         return out
+
 
 def softmax_pt(y_pred, y_true, epsilon=1e-10):
     """
@@ -359,4 +370,3 @@ def percentage_pt(y_pred, y_true):
 
     perc = (y_pred_soft.max(dim=1)[1] == y_true.max(dim=1)[1]).sum()
     return perc
-
