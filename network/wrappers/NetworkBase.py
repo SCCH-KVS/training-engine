@@ -268,21 +268,21 @@ class NetworkBase:
         if framework == "tensorflow":
             if key == 'adam':
                 return tf.train.AdamOptimizer
-            if key == 'amsgrad':
+            elif key == 'amsgrad':
                 from network.third_parties.amsgrad.amsgrad import AMSGrad
                 return AMSGrad
-            if key == 'momentum':
+            elif key == 'momentum':
                 return tf.train.MomentumOptimizer
-            if key == 'gradient':
+            elif key == 'gradient':
                 return tf.train.GradientDescentOptimizer
-            if key == 'proximalgrad':
+            elif key == 'proximalgrad':
                 return tf.train.ProximalGradientDescentOptimizer
             else:
                 raise ValueError('Unexpected optimizer function %s' % key)
         elif framework == "pytorch":
             if key == 'adam':
                 return optim.Adam
-            if key == 'gradient':
+            elif key == 'gradient':
                 return optim.SGD
             else:
                 raise ValueError('Unexpected optimizer function %s' % key)

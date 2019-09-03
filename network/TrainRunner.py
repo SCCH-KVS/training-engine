@@ -287,7 +287,26 @@ class TrainRunner(NetRunner):
                             '\nRESULTS: epoch {:d} train loss = {:.3f}, train accuracy : {:s} ({:.2f} sec) || valid loss = {:.3f}, valid accuracy : {:s} ({:.2f} sec)'
                             .format(epoch, train_aver_loss, epoch_acc_str_tr, epoch_duration_train, valid_aver_loss,
                                     epoch_acc_str_val, epoch_duration_valid))
-                        if prev_loss > valid_aver_loss:
+                        if isinstance(self.ref_patience, list) and epoch in self.ref_patience:
+                                learn_rate *= self.lr_decay
+                                print('\nDecreasing learning rate', learn_rate)
+
+                                model_file_path = os.path.join(self.ckpnt_path,
+                                                               self.timestamp + '_split_' + str(split))
+                                if not os.path.exists(model_file_path):
+                                    os.makedirs(model_file_path)
+
+                                saver.save(sess, "{}/model.ckpt".format(model_file_path), global_step=epoch)
+
+                                print('[SESSION SAVE] Epoch {:d}, loss: {:2f}'.format(epoch, valid_aver_loss))
+                                prev_loss = valid_aver_loss
+                                ref_counter = 0
+
+                                latest_ckpt = tf.train.latest_checkpoint(model_file_path)
+                                saver.restore(sess, latest_ckpt)
+                                print('\n[SESSION RESTORED]')
+
+                        elif prev_loss > valid_aver_loss:
                             # if not os.path.isdir(os.path.join(self.ckpnt_path, self.data_set, self.timestamp)):
                             #     os.mkdir(os.path.join(self.ckpnt_path, self.data_set, self.timestamp))
                             #
