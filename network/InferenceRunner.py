@@ -81,8 +81,12 @@ class InferenceRunner(NetRunner):
             for i in tqdm(range(0, len(self.inference_X)), total=len(self.inference_X), unit=' steps',
                           desc='Inference'):
                 if self.task_type == 'classification':
+                    if self.inference_X[i].shape == (28, 28) and self.img_size[1] == 32:
+                        inference = np.pad(self.inference_X[i], (2, 2), 'constant')
+                    else:
+                        inference = self.inference_X[i]
                     pred_result_ = sess.run(pred, feed_dict={
-                        X: np.reshape(self.inference_X[i],
+                        X: np.reshape(inference,
                                       [1, self.img_size[0], self.img_size[1], self.img_size[2]]), mode: False})
                     self.pred_result.extend(pred_result_)
 

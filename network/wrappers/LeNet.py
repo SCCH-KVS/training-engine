@@ -89,14 +89,14 @@ class LeNet_pt(NetworkBase, nn.Module):
 
         # build net
         # Layer 1: conv and average pooling
-        self.conv_1_1 = self._conv_bn_layer_pt(1, n_out=6, filter_size=5, stride=1, is_training=True,
-                                               nonlin_f=self.nonlin_f, padding=1, name_postfix='1_1')
-        self.pool_1 = nn.AvgPool2d(kernel_size=2, stride=2)
+        self.conv_1_1 = self._conv_bn_layer_pt(1, 6, filter_size=5, stride=1, is_training=True,
+                                               nonlin_f=self.nonlin_f, padding=0, name_postfix='1_1')
+        self.pool_1 = nn.MaxPool2d(kernel_size=2, stride=2)
 
         # Layer 2: conv, avg pooling, faltten
         self.conv_2_1 = self._conv_bn_layer_pt(6, 16, filter_size=5, stride=1, is_training=True,
-                                               nonlin_f=self.nonlin_f, padding=1, name_postfix='1_1')
-        self.pool_2 = nn.AvgPool2d(kernel_size=2, stride=2)
+                                               nonlin_f=self.nonlin_f, padding=0, name_postfix='1_1')
+        self.pool_2 = nn.MaxPool2d(kernel_size=2, stride=2)
 
         # Layer 3 and 4: FC
         self.fc_1 = nn.Linear(400, 120)
