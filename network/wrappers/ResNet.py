@@ -108,70 +108,72 @@ class ResNet(NetworkBase):
 
 class ResNet_pt(NetworkBase, nn.Module):
     def __init__(self, network_type, loss, accuracy, lr, framework,  training, trainable_layers=None, num_filters=64,
-                 optimizer='adam', nonlin='elu', num_classes=2):
+                 optimizer='adam', nonlin='relu', num_classes=2):
         NetworkBase.__init__(self, network_type=network_type, loss=loss, accuracy=accuracy, framework=framework, lr=lr, training=training,
                              trainable_layers=trainable_layers, num_filters=num_filters, optimizer=optimizer, nonlin=nonlin,
                              num_classes=num_classes)
         nn.Module.__init__(self)
         self.in_channels = 64
 
-        self.conv = self._conv_layer_pt(3, 64)
-        self.bn = nn.BatchNorm2d(64)
-        self.relu = self.nonlin_f()
-        self.layer1 = self._make_layer(ResidualBlock, 64, 2)
-        self.avg_pool_1 = nn.AvgPool2d(2)
-        self.layer2 = self._make_layer(ResidualBlock, 128, 2)
-        self.avg_pool_2 = nn.AvgPool2d(2)
-        self.layer3 = self._make_layer(ResidualBlock, 256, 2)
-        self.avg_pool_3 = nn.AvgPool2d(2)
-        self.fc = nn.Linear(4096, num_classes)
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(3, 64, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True))
+        self.conv2_x = self._make_layer(BasicBlock, 64, 2, 1)
+        self.conv3_x = self._make_layer(BasicBlock, 128, 2, 2)
+        self.conv4_x = self._make_layer(BasicBlock, 256, 2, 2)
+        self.conv5_x = self._make_layer(BasicBlock, 512, 2, 2)
+        self.avg_pool = nn.AdaptiveAvgPool2d((1, 1))
+        self.fc = nn.Linear(512, num_classes)
 
     def _make_layer(self, block, out_channels, blocks, stride=1):
-        downsample = None
-        if (stride != 1) or (self.in_channels != out_channels):
-            downsample = nn.Sequential(self._conv_layer_pt(self.in_channels, out_channels, stride=stride),
-                                       nn.BatchNorm2d(out_channels))
+        # we have num_block blocks per layer, the first block
+        # could be 1 or 2, other blocks would always be 1
+        strides = [stride] + [1] * (blocks - 1)
         layers = []
-        layers.append(block(self.in_channels, out_channels, stride, downsample))
-        self.in_channels = out_channels
-        for i in range(1, blocks):
-            layers.append(block(out_channels, out_channels))
+        for stride in strides:
+            layers.append(block(self.in_channels, out_channels, stride))
+            self.in_channels = out_channels
+
         return nn.Sequential(*layers)
 
     def forward(self, X):
-        x = self.conv(X)
-        x = self.bn(x)
-        x = self.relu(x)
-        x = self.layer1(x)
-        x = self.avg_pool_1(x)
-        x = self.layer2(x)
-        x = self.avg_pool_2(x)
-        x = self.layer3(x)
-        x = self.avg_pool_3(x)
-        x = x.view(x.size(0), -1)
-        x = self.fc(x)
-        return x
+        output = self.conv1(X)
+        output = self.conv2_x(output)
+        output = self.conv3_x(output)
+        output = self.conv4_x(output)
+        output = self.conv5_x(output)
+        output = self.avg_pool(output)
+        output = output.view(output.size(0), -1)
+        output = self.fc(output)
+
+        return output
 
 
-class ResidualBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, stride=1, downsample=None):
-        nn.Module.__init__(self)
-        self.conv1 = nn.Conv2d(in_channels, out_channels, 1, stride)
-        self.bn1 = nn.BatchNorm2d(out_channels)
-        self.relu = nn.ReLU()
-        self.conv2 = nn.Conv2d(out_channels, out_channels, 1, stride)
-        self.bn2 = nn.BatchNorm2d(out_channels)
-        self.downsample = downsample
+class BasicBlock(nn.Module):
 
-    def forward(self, X):
-        residual = X
-        x = self.conv1(X)
-        x = self.bn1(x)
-        x = self.relu(x)
-        x = self.conv2(x)
-        x = self.bn2(x)
-        if self.downsample:
-            residual = self.downsample(residual)
-        x += residual
-        x = self.relu(x)
-        return x
+    def __init__(self, in_channels, out_channels, stride=1):
+        super().__init__()
+
+        # residual function
+        self.residual_function = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(out_channels)
+        )
+
+        # shortcut
+        self.shortcut = nn.Sequential()
+
+        # the shortcut output dimension is not the same with residual function
+        # use 1*1 convolution to match the dimension
+        if stride != 1 or in_channels != out_channels:
+            self.shortcut = nn.Sequential(
+                nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride, bias=False),
+                nn.BatchNorm2d(out_channels)
+            )
+
+    def forward(self, x):
+        return nn.ReLU(inplace=True)(self.residual_function(x) + self.shortcut(x))

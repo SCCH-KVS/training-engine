@@ -132,7 +132,12 @@ class InferenceRunner(NetRunner):
         for i in tqdm(range(0, len(self.inference_X)), total=len(self.inference_X), unit=' steps',
                       desc='Inference'):
             if self.task_type == 'classification':
-                pred_result_ = model(torch.from_numpy(np.reshape(self.inference_X[i],
+                if self.inference_X[i].shape == (28, 28, 1) and self.img_size[1] == 32:
+                    npad = ((2, 2), (2, 2), (0, 0))
+                    inference = np.pad(self.inference_X[i], pad_width=npad, mode='constant')
+                else:
+                    inference = self.inference_X[i]
+                pred_result_ = model(torch.from_numpy(np.reshape(inference,
                                   [1, self.img_size[2], self.img_size[0], self.img_size[1]])).to(device,  dtype=torch.float)).to(device)
                 self.pred_result.extend(pred_result_.cpu().detach().numpy())
 

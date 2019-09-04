@@ -496,8 +496,13 @@ class TrainRunner(NetRunner):
                 #             epoch_accur_valid, epoch_duration_valid))
 
                 prev_lr = self.train_op.param_groups[0]['lr']
-                rp.step(valid_aver_loss)
+                if isinstance(self.ref_patience, list):
+                    if epoch in self.ref_patience:
+                        self.train_op.param_groups[0]['lr'] = prev_lr*self.lr_decay
+                else:
+                    rp.step(valid_aver_loss)
                 curr_lr = self.train_op.param_groups[0]['lr']
+
                 # print("Prev lr: {} Curr lr: {}".format(prev_lr, curr_lr))
                 #
                 # print('update loss')
@@ -547,7 +552,7 @@ class TrainRunner(NetRunner):
                     print('[SESSION SAVE] Epoch {:d}, loss: {:2f}, accur: {:2f}, lr: {:4f}'.format(epoch, valid_aver_loss, epoch_accur_valid, curr_lr))
                     prev_loss = valid_aver_loss
                     # ref_counter = 0
-                if curr_lr < prev_lr:
+                if curr_lr < prev_lr and isinstance(self.ref_patience, int):
                     ref_iter_count += 1
                     if ref_iter_count == self.ref_steps+1:
                         print('\nEarly stopping\n Saving last best model:')
