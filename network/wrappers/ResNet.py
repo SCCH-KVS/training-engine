@@ -22,7 +22,7 @@ from network.wrappers.NetworkBase import NetworkBase
 
 class ResNet(NetworkBase):
     def __init__(self, network_type, loss, accuracy, lr, framework, training, trainable_layers=None, num_filters=64,
-                 optimizer='adam', nonlin='elu', num_classes=2):
+                 optimizer='adam', nonlin='relu', num_classes=2):
         """
         ResNet Convolutional Neural Network constructor
         :param loss:        used loss function
@@ -79,29 +79,29 @@ class ResNet(NetworkBase):
         with tf.name_scope('s_outputs'):
             pooling_1 = tf.layers.average_pooling2d(conv_5_2, pool_size=2, strides=3, padding='valid', name='pooling_1')
             flat = tf.layers.flatten(pooling_1, name='flatten')
-            output_p = tf.layers.dense(flat, units=self.num_classes, name='output')
+            output_p = tf.layers.dense(flat, units=self.num_classes, name='output', activation='softmax')
         return output_p
 
     def _basic_block(self, X, filters, i, strides):
         # Retrieve Filters
-        conv_x_1 = tf.layers.conv2d(X, filters=filters, kernel_size=1, padding='same', name='conv_x_1_' + str(i),
+        conv_x_1 = tf.layers.conv2d(X, filters=filters, kernel_size=1, padding='same', name='conv_10_1_' + str(i),
                                     strides=strides)
         batch_norm_x_1 = tf.layers.batch_normalization(conv_x_1, training=self.is_training, fused=False,
-                                                       name='batch_x_1_' + str(i))
-        nonlin = self.nonlin_f(batch_norm_x_1, name='activation_x_1_' + str(i))
-        conv_x_2 = tf.layers.conv2d(nonlin, filters=filters, kernel_size=3, padding='same', name='conv_x_2_' + str(i),
+                                                       name='batch_10_1_' + str(i))
+        nonlin = self.nonlin_f(batch_norm_x_1, name='activation_10_1_' + str(i))
+        conv_x_2 = tf.layers.conv2d(nonlin, filters=filters, kernel_size=3, padding='same', name='conv_10_2_' + str(i),
                                     strides=1)
         batch_norm_x_2 = tf.layers.batch_normalization(conv_x_2, training=self.is_training, fused=False,
-                                                       name='batch_x_2_' + str(i))
+                                                       name='batch_10_2_' + str(i))
 
         shortcut = tf.layers.Layer()
         if strides != 1 or X != filters:
-            shortcut = tf.layers.conv2d(X, filters=filters, kernel_size=1, padding='valid', name='conv_x_x_' + str(i),
+            shortcut = tf.layers.conv2d(X, filters=filters, kernel_size=1, padding='valid', name='conv_10_3_' + str(i),
                                         strides=strides)
             shortcut = tf.layers.batch_normalization(shortcut, training=self.is_training, fused=False,
-                                                     name='batch_x_x_' + str(i))
+                                                     name='batch_10_3_' + str(i))
         output = batch_norm_x_2+shortcut
-        output = self.nonlin_f(output, name='activation_x_x_' + str(i))
+        output = self.nonlin_f(output, name='activation_10_2_' + str(i))
 
         return output
 

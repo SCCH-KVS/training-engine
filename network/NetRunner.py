@@ -295,15 +295,17 @@ class NetRunner:
                 elif self.network_type == 'LeNet':
                     return LeNet.LeNet(self.network_type, self.loss_type, self.accuracy_type, self.learning_rate, framework=self.framework,
                                            training=self.is_training, num_filters=self.num_filters, nonlin=self.nonlin, num_classes=self.num_classes,
-                                              trainable_layers=self.trainable_layers)
+                                              trainable_layers=self.trainable_layers, optimizer=self.optimizer)
                 elif self.network_type == 'VGG16':
                     return VGG16.VGG16(self.network_type, self.loss_type, self.accuracy_type, self.learning_rate,
-                                     framework=self.framework, training=self.training_mode,
-                                     trainable_layers=self.trainable_layers, num_classes=self.num_classes)
+                                       framework=self.framework, training=self.training_mode,
+                                       trainable_layers=self.trainable_layers, num_classes=self.num_classes,
+                                       optimizer=self.optimizer)
                 elif self.network_type == 'ResNet':
                     return ResNet.ResNet(self.network_type, self.loss_type, self.accuracy_type, self.learning_rate,
-                                     framework=self.framework, training=self.training_mode,
-                                     trainable_layers=self.trainable_layers, num_classes=self.num_classes)
+                                         framework=self.framework, training=self.training_mode,
+                                         trainable_layers=self.trainable_layers, num_classes=self.num_classes,
+                                         optimizer=self.optimizer)
                 else:
                     raise ValueError('Architecture does not exist')
         elif self.framework == "pytorch":
