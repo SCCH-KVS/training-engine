@@ -692,17 +692,25 @@ class TrainRunner(NetRunner):
         final_config = list()
 
         for c in range(0, iterations):
-            current_config = dict()
-
-            current_config['lr'] = np.random.uniform(self.lr_range[0], self.lr_range[1])
-            current_config['lr_decay'] = np.random.uniform(self.lr_decay_range[0], self.lr_decay_range[1])
-            current_config['ref_steps'] = random.randint(self.ref_steps_range[0], self.ref_steps_range[1])
-            current_config['ref_patience'] = random.randint(self.ref_patience_range[0], self.ref_patience_range[1])
-            current_config['batch_size'] = random.randint(self.batch_size_range[0], self.batch_size_range[1])
-            current_config['loss'] = random.choice(self.loss_range)
-            current_config['accuracy'] = random.choice(self.accuracy_range)
-            current_config['optimizer'] = random.choice(self.optimizer_range)
-
+            current_config = self._get_random_numbers()
+            while current_config in final_config:
+                current_config = self._get_random_numbers()
             final_config.append(current_config)
 
         return final_config
+
+    def _get_random_numbers(self):
+        current_config = dict()
+
+        random_lr = np.random.uniform(self.lr_range[0], self.lr_range[1])
+        current_config['lr'] = round(random_lr, len(str(self.lr_range[1])))
+        random_lr_decay = np.random.uniform(self.lr_decay_range[0], self.lr_decay_range[1])
+        current_config['lr_decay'] = round(random_lr_decay, len(str(self.lr_decay_range[1])))
+        current_config['ref_steps'] = random.randint(self.ref_steps_range[0], self.ref_steps_range[1])
+        current_config['ref_patience'] = random.randint(self.ref_patience_range[0], self.ref_patience_range[1])
+        current_config['batch_size'] = random.randint(self.batch_size_range[0], self.batch_size_range[1])
+        current_config['loss'] = random.choice(self.loss_range)
+        current_config['accuracy'] = random.choice(self.accuracy_range)
+        current_config['optimizer'] = random.choice(self.optimizer_range)
+
+        return current_config
