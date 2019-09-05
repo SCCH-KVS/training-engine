@@ -290,7 +290,7 @@ class NetworkBase:
 
     @staticmethod
     def _conv_bn_layer_tf(input_layer, n_filters, filter_scale=1, filter_size=3, is_training=True, nonlin_f=None,
-                       padding='same', name='s_conv_bn', name_postfix='1_1', strides=None):
+                       padding='same', name='s_conv_bn', name_postfix='1_1', strides=(1, 1)):
         """
         Convolution layer with batch normalization
         :param input_layer:     input layer
