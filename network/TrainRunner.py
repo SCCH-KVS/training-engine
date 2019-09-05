@@ -585,6 +585,7 @@ class TrainRunner(NetRunner):
                 return prev_loss
 
     def _run_hyperband(self):
+        self.all_configs = list()
         file = open(self.hyperband_path+"/"+str(self.timestamp)+".txt", "w")
         smax = int(math.log(self.max_amount_resources, self.halving_proportion))  # default 4
         best_result_so_far = list()
@@ -688,14 +689,19 @@ class TrainRunner(NetRunner):
         return current_params
 
     def _get_random_parameter_configurations(self, iterations):
-
         final_config = list()
+        helper_dict = self.all_configs[:]
+        for x in helper_dict:
+            if 'epochs' in x:
+                del x['epochs']
 
         for c in range(0, iterations):
             current_config = self._get_random_numbers()
-            while current_config in final_config:
+            while current_config in helper_dict:
                 current_config = self._get_random_numbers()
             final_config.append(current_config)
+            helper_dict.append(current_config)
+            self.all_configs.append(current_config)
 
         return final_config
 
