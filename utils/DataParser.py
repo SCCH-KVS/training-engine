@@ -424,34 +424,36 @@ class DataParser:
                 self.log_info_path = log_file_name
 
     def _load_cifar100(self, h5py_file_name, log_file_name):
-        if not os.path.isfile(h5py_file_name):
-            print('Creating h5py file for CIFAR100')
-            if self.framework is 'tensorflow':
-                import tensorflow as tf
-                if self.is_training:
-                    cifar100 = tf.keras.datasets.cifar100
-                    (X_data, y_data), _ = cifar100.load_data()
-                else:
-                    cifar100 = tf.keras.datasets.cifar100
-                    _, (X_data, y_data) = cifar100.load_data()
 
-            elif self.framework is "pytorch":
-                import torchvision.datasets as datasets
-                if self.is_training:
-                    cifar_trainset = datasets.CIFAR100(root=os.path.join(self.data_path, self.data_set), train=True, download=True, transform=None)
-                    y_data = [x for _, x in cifar_trainset]
-                    X_data = [np.asarray(x) for x, _ in cifar_trainset]
-                    #X_data = cifar_trainset.train_data
-                    # y_data = cifar_trainset.train_labels
-                else:
-                    cifar_trainset = datasets.CIFAR100(root=os.path.join(self.data_path, self.data_set), train=True, download=True, transform=None)
-                    # self.X_data = cifar_trainset.test_data
-                    # self.y_data = cifar_trainset.test_labels
-                    self.X_data = [np.asarray(x) for x, _ in cifar_trainset]
-                    self.y_data = [x for _, x in cifar_trainset]
-
+        print('Creating h5py file for CIFAR100')
+        if self.framework is 'tensorflow':
+            import tensorflow as tf
+            if self.is_training:
+                cifar100 = tf.keras.datasets.cifar100
+                (X_data, y_data), _ = cifar100.load_data()
             else:
-                raise ValueError('Framework does not exist')
+                cifar100 = tf.keras.datasets.cifar100
+                _, (self.X_data, self.y_data) = cifar100.load_data()
+
+        #TODO check saving in pytorch
+        elif self.framework is "pytorch":
+            import torchvision.datasets as datasets
+            if self.is_training:
+                cifar_trainset = datasets.CIFAR100(root=os.path.join(self.data_path, self.data_set), train=True, download=True, transform=None)
+                y_data = [x for _, x in cifar_trainset]
+                X_data = [np.asarray(x) for x, _ in cifar_trainset]
+                #X_data = cifar_trainset.train_data
+                # y_data = cifar_trainset.train_labels
+            else:
+                cifar_trainset = datasets.CIFAR100(root=os.path.join(self.data_path, self.data_set), train=True, download=True, transform=None)
+                # self.X_data = cifar_trainset.test_data
+                # self.y_data = cifar_trainset.test_labels
+                self.X_data = [np.asarray(x) for x, _ in cifar_trainset]
+                self.y_data = [x for _, x in cifar_trainset]
+
+        else:
+            raise ValueError('Framework does not exist')
+
         if self.is_training:
             if not os.path.isfile(h5py_file_name):
             # TODO: add normalization and zero-centering

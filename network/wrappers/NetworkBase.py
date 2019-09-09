@@ -114,7 +114,10 @@ class NetworkBase:
         """
         if global_step:
             if self.trainable_layers == 'all':
-                return self.optimizer_f(self.learning_rate).minimize(self.loss, global_step=global_step)
+                if self.optimizer == 'momentum':
+                    return self.optimizer_f(self.learning_rate, momentum=0.9).minimize(self.loss, global_step=global_step)
+                else:
+                    return self.optimizer_f(self.learning_rate).minimize(self.loss, global_step=global_step)
             else:
                 first_train_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
                                                      self.trainable_layers)
