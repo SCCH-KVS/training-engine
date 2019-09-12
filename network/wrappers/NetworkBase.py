@@ -116,6 +116,8 @@ class NetworkBase:
             if self.trainable_layers == 'all':
                 if self.optimizer == 'momentum':
                     return self.optimizer_f(self.learning_rate, momentum=0.9).minimize(self.loss, global_step=global_step)
+                elif self.optimizer == 'gradient':
+                    return self.optimizer_f(self.learning_rate, momentum=0.9, weight_decay=5e-4).minimize(self.loss, global_step=global_step)
                 else:
                     return self.optimizer_f(self.learning_rate).minimize(self.loss, global_step=global_step)
             else:
@@ -124,7 +126,10 @@ class NetworkBase:
                 return self.optimizer_f(self.learning_rate).minimize(self.loss, var_list=first_train_vars,
                                                                      global_step=global_step)
         else:
-            return self.optimizer_f(net_param, self.learning_rate)
+            if self.optimizer == 'gradient':
+                return self.optimizer_f(net_param, self.learning_rate, momentum=0.9, weight_decay=5e-4)
+            else:
+                return self.optimizer_f(net_param, self.learning_rate)
 
     @staticmethod
     def _pick_nonlin_func(key, framework):

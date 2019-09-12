@@ -25,6 +25,8 @@ import time
 from utils.utils import *
 import numpy as np
 
+import torchvision.transforms as transforms
+
 class DataParser:
 
     def __init__(self, data_set, data_file, data_folder, num_classes, img_size, normalize, zero_center, data_split, cross_val,
@@ -438,14 +440,29 @@ class DataParser:
         #TODO check saving in pytorch
         elif self.framework is "pytorch":
             import torchvision.datasets as datasets
+            mean = (0.5070751592371323, 0.48654887331495095, 0.4409178433670343)
+            std = (0.2673342858792401, 0.2564384629170883, 0.27615047132568404)
+            transform_train = transforms.Compose([
+                # transforms.ToPILImage(),
+                transforms.RandomCrop(32, padding=4),
+                transforms.RandomHorizontalFlip(),
+                transforms.RandomRotation(15),
+                transforms.ToTensor(),
+                transforms.Normalize(mean, std)
+            ])
+            transform_test = transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize(mean, std)
+            ])
+
             if self.is_training:
-                cifar_trainset = datasets.CIFAR100(root=os.path.join(self.data_path, self.data_set), train=True, download=True, transform=None)
+                cifar_trainset = datasets.CIFAR100(root=os.path.join(self.data_path, self.data_set), train=True, download=True, transform=transform_train)
                 y_data = [x for _, x in cifar_trainset]
                 X_data = [np.asarray(x) for x, _ in cifar_trainset]
                 #X_data = cifar_trainset.train_data
                 # y_data = cifar_trainset.train_labels
             else:
-                cifar_trainset = datasets.CIFAR100(root=os.path.join(self.data_path, self.data_set), train=True, download=True, transform=None)
+                cifar_trainset = datasets.CIFAR100(root=os.path.join(self.data_path, self.data_set), train=False, download=True, transform=transform_test)
                 # self.X_data = cifar_trainset.test_data
                 # self.y_data = cifar_trainset.test_labels
                 self.X_data = [np.asarray(x) for x, _ in cifar_trainset]

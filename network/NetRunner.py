@@ -84,6 +84,7 @@ class NetRunner:
         self.experiment_path = args.experiment_path
         self.chpnt2load = args.chpnt2load
         self.hyperband = args.hyperband
+        self.bohb = args.bohb
 
         if args.hyperband:
             self.halving_proportion = args.halving_proportion
@@ -96,6 +97,11 @@ class NetRunner:
             self.loss_range = args.loss_range
             self.accuracy_range = args.accuracy_range
             self.optimizer_range = args.optimizer_range
+            if args.bohb:
+                self.min_points_in_model = args.min_points_in_model
+                self.bandwidth_factor = args.bandwidth_factor
+                self.top_n_percent = args.top_n_percent
+
         if not self.is_training:
             self.class_labels = args.class_labels
         if args.data_set:
@@ -324,15 +330,15 @@ class NetRunner:
             elif self.network_type == 'LeNet':
                 return LeNet.LeNet_pt(self.network_type, self.loss_type, self.accuracy_type, self.learning_rate, framework=self.framework,
                                        training=self.is_training, num_filters=self.num_filters, nonlin=self.nonlin, num_classes=self.num_classes,
-                                          trainable_layers=self.trainable_layers)
+                                          trainable_layers=self.trainable_layers, optimizer=self.optimizer)
             elif self.network_type == 'VGG16':
                 return VGG16.VGG16_pt(self.network_type, self.loss_type, self.accuracy_type, self.learning_rate, framework=self.framework,
                                        training=self.is_training, num_filters=self.num_filters, nonlin=self.nonlin, num_classes=self.num_classes,
-                                          trainable_layers=self.trainable_layers)
+                                          trainable_layers=self.trainable_layers, optimizer=self.optimizer)
             elif self.network_type == 'ResNet':
                 return ResNet.ResNet_pt(self.network_type, self.loss_type, self.accuracy_type, self.learning_rate, framework=self.framework,
                                        training=self.is_training, num_filters=self.num_filters, nonlin=self.nonlin, num_classes=self.num_classes,
-                                          trainable_layers=self.trainable_layers)
+                                          trainable_layers=self.trainable_layers, optimizer=self.optimizer)
             else:
                 raise ValueError('Architecture does not exist')
 
