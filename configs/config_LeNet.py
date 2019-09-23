@@ -59,18 +59,18 @@ def load_config():
     # or fixed Value for discrete e.g. ['percent']
     # Epochs are definded over max_amount_resources
     config.hyperband = True
-    config.halving_proportion = 3  # min 2, default 3
-    config.max_amount_resources = 27   # no of max epochs (min 2, max 1000)
+    config.halving_proportion = 2 # min 2, default 3
+    config.max_amount_resources = 2   # no of max epochs (min 2, max 1000)
     config.lr_range = [0.00001, 0.1]  # [0.1, 0.00001]
     config.lr_decay_range = [0.00001, 0.1]  # [0.1, 0.00001]
-    config.ref_steps_range = [1, int(config.max_amount_resources/3)]  # 0, number of epochs /3
-    config.ref_patience_range = [1, int(config.max_amount_resources/3)]   # 0, number of epochs /3
+    config.ref_steps_range = [0, 1]  # 0, number of epochs /3
+    config.ref_patience_range = [0, 1]   # 0, number of epochs /3
     config.batch_size_range = [config.num_classes, 512]  # num_classes, max capacity of memory
     config.loss_range = ['softmax', 'sigmoid', 'margin']  # ['softmax', 'sigmoid', 'margin', 'mse', 'mse_loss']
     config.accuracy_range = ['mse', 'percent']  # ['mse', 'percent']
     config.optimizer_range = ['adam', 'momentum', 'gradient']  # ['adam', 'momentum', 'gradient']
 
-    config.bohb = True
+    config.bohb = False
     config.bandwidth_factor = 3
     config.top_n_percent = 0.5  # between 0.01 and 0.99
     config.num_samples = 64

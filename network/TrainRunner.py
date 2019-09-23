@@ -628,7 +628,7 @@ class TrainRunner(NetRunner):
             r = int(self.max_amount_resources * (self.halving_proportion ** -s))
             n = int(np.floor((smax + 1) / (s + 1)) * self.halving_proportion ** s)
 
-            set_of_configurations = self._get_random_parameter_configurations(n)
+            s
 
             for i in range(0, s+1):
                 results = list()
@@ -638,11 +638,12 @@ class TrainRunner(NetRunner):
 
                 #print("{}: {} : {}: {} : {}: {} : {}: {}".format("Bracket", s, "Round", i, "Ni", ni, "Ri", ri))
 
-                for t in set_of_configurations:
-                    t = self._update_current_parameters(t, ri)
+                for x in range(1, n):
+                    next_config = self._get_random_parameter_configurations()
+                    next_config = self._update_current_parameters(next_config, ri)
                     print("Next config:")
-                    print(t)
-                    file.write(str(t) + " Epochs: "+str(ri)+"\n")
+                    print(next_config)
+                    file.write(str(next_config) + " Epochs: "+str(ri)+"\n")
                     start_time = time.time()
                     if self.framework == 'tensorflow':
                         self.build_tensorflow_pipeline()
@@ -657,7 +658,7 @@ class TrainRunner(NetRunner):
                     file.write("Time: "+str(elapsed_time)+"\n")
                     intermediate_results = list()
                     intermediate_results.append(loss_and_acc)
-                    intermediate_results.append(t)
+                    intermediate_results.append(next_config)
                     results.append(intermediate_results)
 
                 remaining_configs = round(ni/self.halving_proportion)
@@ -849,9 +850,9 @@ class TrainRunner(NetRunner):
     def _update_current_parameters(self, current_params, epochs):
         self.lr = current_params['lr']
         self.lr_decay = current_params['lr_decay']
-        #self.ref_steps = current_params['ref_steps']
-        #self.ref_patience = current_params['ref_patience']
-        #self.batch_size = current_params['batch_size']
+        self.ref_steps = current_params['ref_steps']
+        self.ref_patience = current_params['ref_patience']
+        self.batch_size = current_params['batch_size']
         self.loss_type = current_params['loss']
         self.accuracy_type = current_params['accuracy']
         self.optimizer = current_params['optimizer']
@@ -965,9 +966,9 @@ class TrainRunner(NetRunner):
         current_config['lr'] = round(random_lr, len(str(self.lr_range[1])))
         random_lr_decay = np.random.uniform(self.lr_decay_range[0], self.lr_decay_range[1])
         current_config['lr_decay'] = round(random_lr_decay, len(str(self.lr_decay_range[1])))
-        #current_config['ref_steps'] = random.randint(self.ref_steps_range[0], self.ref_steps_range[1])
-        #current_config['ref_patience'] = random.randint(self.ref_patience_range[0], self.ref_patience_range[1])
-        #current_config['batch_size'] = random.randint(self.batch_size_range[0], self.batch_size_range[1])
+        current_config['ref_steps'] = random.randint(self.ref_steps_range[0], self.ref_steps_range[1])
+        current_config['ref_patience'] = random.randint(self.ref_patience_range[0], self.ref_patience_range[1])
+        current_config['batch_size'] = random.randint(self.batch_size_range[0], self.batch_size_range[1])
         current_config['loss'] = random.choice(self.loss_range)
         current_config['accuracy'] = random.choice(self.accuracy_range)
         current_config['optimizer'] = random.choice(self.optimizer_range)
