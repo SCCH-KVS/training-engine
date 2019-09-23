@@ -9,3 +9,5 @@ seaborn
 tqdm
 numba
 psutil
+statsmodels
+ConfigSpace

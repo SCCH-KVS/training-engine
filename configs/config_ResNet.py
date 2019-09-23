@@ -33,10 +33,10 @@ def load_config():
     config.loss = 'cross-entropy'  # changable
     config.optimizer = 'margin'  #changable
     config.mi_record = False
-    config.gpu_load = 0.9
+    config.gpu_load = 0.8
     config.num_classes = 100
     config.filters = 64
-    config.class_labels = [str(i) for i in range(10)]
+    config.class_labels = [str(i) for i in range(100)]
     config.upconv = 'upconv'
     config.nonlin = 'relu'
     config.task_type = 'classification'
@@ -52,7 +52,10 @@ def load_config():
     config.chpnt2load = ''
     config.multi_task = False
     config.cross_val = 1
-    config.framework = 'tensorflow'
+    config.framework = 'pytorch'
     config.experiment_path = None
+
+    config.hyperband = False
+    config.bohb = False
 
     return config

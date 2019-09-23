@@ -116,7 +116,7 @@ class NetworkBase:
             if self.trainable_layers == 'all':
                 if self.optimizer == 'momentum':
                     return self.optimizer_f(self.learning_rate, momentum=0.9).minimize(self.loss, global_step=global_step)
-                elif self.optimizer == 'gradient':
+                elif self.optimizer == 'gradient' and self.framework=='pytorch':
                     return self.optimizer_f(self.learning_rate, momentum=0.9, weight_decay=5e-4).minimize(self.loss, global_step=global_step)
                 else:
                     return self.optimizer_f(self.learning_rate).minimize(self.loss, global_step=global_step)
@@ -285,6 +285,8 @@ class NetworkBase:
                 return tf.train.GradientDescentOptimizer
             elif key == 'proximalgrad':
                 return tf.train.ProximalGradientDescentOptimizer
+            elif key == 'sgd':
+                return tf.keras.optimizers.SGD
             else:
                 raise ValueError('Unexpected optimizer function %s' % key)
         elif framework == "pytorch":

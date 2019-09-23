@@ -426,24 +426,71 @@ class DataParser:
                 self.log_info_path = log_file_name
 
     def _load_cifar100(self, h5py_file_name, log_file_name):
+        import numpy as np
+
+        mean = (0.5070751592371323, 0.48654887331495095, 0.4409178433670343)
+        std = (0.2673342858792401, 0.2564384629170883, 0.27615047132568404)
 
         print('Creating h5py file for CIFAR100')
         if self.framework is 'tensorflow':
             import tensorflow as tf
+
+            transform_train = transforms.Compose([
+                transforms.ToPILImage(),
+                transforms.RandomCrop(32, padding=4),
+                transforms.RandomHorizontalFlip(),
+                transforms.RandomRotation(15),
+            ])
+
             if self.is_training:
                 cifar100 = tf.keras.datasets.cifar100
-                (X_data, y_data), _ = cifar100.load_data()
+                (X_data_tmp, y_data), _ = cifar100.load_data('fine')
+                cur_mean = np.mean(X_data_tmp)
+                cur_std = np.std(X_data_tmp)
+
+                for i in range(len(X_data_tmp)):
+                    X_data_tmp[i] = transform_train(X_data_tmp[i])
+
+                X_data_tmp = np.reshape(X_data_tmp, (50000, 3, 32, 32))
+                X_data = np.empty(X_data_tmp.shape)
+
+                for i in range(len(X_data_tmp)):
+                    axis1 = mean[0] + (X_data_tmp[i][0] - cur_mean) * (std[0]/cur_std)
+                    axis2 = mean[1] + (X_data_tmp[i][1] - cur_mean) * (std[1] / cur_std)
+                    axis3 = mean[2] + (X_data_tmp[i][2] - cur_mean) * (std[2] / cur_std)
+                    X_data[i][0] = axis1
+                    X_data[i][1] = axis2
+                    X_data[i][2] = axis3
+
+                X_data = np.reshape(X_data, (50000, 32, 32, 3))
+
+
             else:
                 cifar100 = tf.keras.datasets.cifar100
-                _, (self.X_data, self.y_data) = cifar100.load_data()
+                _, (X_data_tmp, self.y_data) = cifar100.load_data('fine')
+                cur_mean = np.mean(X_data_tmp)
+                cur_std = np.std(X_data_tmp)
+
+                X_data_tmp = np.reshape(X_data_tmp, (10000, 3, 32, 32))
+                X_data = np.empty(X_data_tmp.shape)
+
+                for i in range(len(X_data_tmp)):
+                    axis1 = mean[0] + (X_data_tmp[i][0] - cur_mean) * (std[0]/cur_std)
+                    axis2 = mean[1] + (X_data_tmp[i][1] - cur_mean) * (std[1] / cur_std)
+                    axis3 = mean[2] + (X_data_tmp[i][2] - cur_mean) * (std[2] / cur_std)
+                    X_data[i][0] = axis1
+                    X_data[i][1] = axis2
+                    X_data[i][2] = axis3
+
+                self.X_data = np.reshape(X_data, (10000, 32, 32, 3))
+
 
         #TODO check saving in pytorch
         elif self.framework is "pytorch":
             import torchvision.datasets as datasets
-            mean = (0.5070751592371323, 0.48654887331495095, 0.4409178433670343)
-            std = (0.2673342858792401, 0.2564384629170883, 0.27615047132568404)
+
             transform_train = transforms.Compose([
-                # transforms.ToPILImage(),
+                #transforms.ToPILImage(),
                 transforms.RandomCrop(32, padding=4),
                 transforms.RandomHorizontalFlip(),
                 transforms.RandomRotation(15),

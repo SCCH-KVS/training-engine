@@ -20,12 +20,17 @@ import time
 import h5py
 import json
 import math
+import copy
 import tf2onnx
 import numpy as np
 import random
 import tensorflow as tf
 from tqdm import tqdm
 # import tensorflow.contrib.slim as slim
+import statsmodels.api as sm
+import ConfigSpace as CS
+import ConfigSpace.hyperparameters as CSH
+import scipy.stats as sps
 
 from network.NetRunner import NetRunner
 from utils.BatchIterator import BatchIterator
@@ -34,8 +39,17 @@ from utils.gradcam.GradCAM import grad_cam_plus_plus as gradcam
 
 import torch
 from torch.autograd import Variable
-from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR
+from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR, _LRScheduler
 import torch.onnx as torch_onnx
+
+
+class WarmUpLR(_LRScheduler):
+    def __init__(self, optimizer, total_iters, last_epoch=-1):
+        self.total_iters = total_iters
+        super().__init__(optimizer, last_epoch)
+
+    def get_lr(self):
+        return [base_lr * self.last_epoch / (self.total_iters + 1e-8) for base_lr in self.base_lrs]
 
 
 class TrainRunner(NetRunner):
@@ -57,7 +71,10 @@ class TrainRunner(NetRunner):
         if self.framework == 'tensorflow':
             os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
             if self.hyperband:
-                best_configuration = self._run_hyperband()
+                if self.bohb:
+                    best_configuration = self._run_bohb_hyperband()
+                else:
+                    best_configuration = self._run_hyperband()
                 return best_configuration
             else:
                 self.build_tensorflow_pipeline()
@@ -65,7 +82,10 @@ class TrainRunner(NetRunner):
                 return valid_loss_final
         elif self.framework == 'pytorch':
             if self.hyperband:
-                best_configuration = self._run_hyperband()
+                if self.bohb:
+                    best_configuration = self._run_bohb_hyperband()
+                else:
+                    best_configuration = self._run_hyperband()
                 return best_configuration
             else:
                 self.build_pytorch_pipeline()
@@ -287,12 +307,11 @@ class TrainRunner(NetRunner):
                             '\nRESULTS: epoch {:d} train loss = {:.3f}, train accuracy : {:s} ({:.2f} sec) || valid loss = {:.3f}, valid accuracy : {:s} ({:.2f} sec)'
                             .format(epoch, train_aver_loss, epoch_acc_str_tr, epoch_duration_train, valid_aver_loss,
                                     epoch_acc_str_val, epoch_duration_valid))
+                        model_file_path = os.path.join(self.ckpnt_path,
+                                                       self.timestamp + '_split_' + str(split))
                         if isinstance(self.ref_patience, list) and epoch in self.ref_patience:
                                 learn_rate *= self.lr_decay
                                 print('\nDecreasing learning rate', learn_rate)
-
-                                model_file_path = os.path.join(self.ckpnt_path,
-                                                               self.timestamp + '_split_' + str(split))
                                 if not os.path.exists(model_file_path):
                                     os.makedirs(model_file_path)
 
@@ -311,9 +330,6 @@ class TrainRunner(NetRunner):
                             #     os.mkdir(os.path.join(self.ckpnt_path, self.data_set, self.timestamp))
                             #
                             # model_file_path = os.path.join('experiments', 'ckpnt_logs', self.data_set, self.timestamp, self.timestamp + '_split_' + str(split))
-
-                            model_file_path = os.path.join(self.ckpnt_path,
-                                                           self.timestamp + '_split_' + str(split))
                             if not os.path.exists(model_file_path):
                                 os.makedirs(model_file_path)
 
@@ -347,8 +363,6 @@ class TrainRunner(NetRunner):
                                 ref_iter_count += 1
                                 if ref_iter_count == self.ref_steps:
                                     print('\nEarly stopping')
-                                    model_file_path = os.path.join(self.ckpnt_path,
-                                                                   self.timestamp + '_split_' + str(split))
                                     if not os.path.exists(model_file_path):
                                         os.makedirs(model_file_path)
 
@@ -376,6 +390,7 @@ class TrainRunner(NetRunner):
             return valid_aver_loss, epoch_acc_str_val, train_aver_loss, epoch_acc_str_tr
 
     def _run_pytorch_pipeline(self):
+        warmup_scheduler = WarmUpLR(self.train_op, self.batch_size)
         h5_file = h5py.File(self.h5_data_file, 'r')
 
         with open(self.json_log, 'r') as f:
@@ -437,6 +452,12 @@ class TrainRunner(NetRunner):
                 # print([self.img_size[0], self.img_size[1], self.img_size[2]])
 
                 for i in tqdm(train_generator, total=train_lim, unit=' steps', desc='Epoch {:d} train'.format(epoch)):
+                    if epoch <= 1:
+                        warmup_scheduler.step()
+                        self.train_op = warmup_scheduler.optimizer
+                        if self.train_op.param_groups[0]['lr'] > self.learning_rate:
+                            self.train_op.param_groups[0]['lr'] = self.learning_rate
+
                     total_recall_counter_train += 1
                     # start_time = time.time()
                     ff = list(i)
@@ -619,6 +640,8 @@ class TrainRunner(NetRunner):
 
                 for t in set_of_configurations:
                     t = self._update_current_parameters(t, ri)
+                    print("Next config:")
+                    print(t)
                     file.write(str(t) + " Epochs: "+str(ri)+"\n")
                     start_time = time.time()
                     if self.framework == 'tensorflow':
@@ -655,11 +678,159 @@ class TrainRunner(NetRunner):
                                                           "Valid Acc:", best_result_so_far[0][1], "Train Loss:",
                                                           best_result_so_far[0][2], "Train Acc:",
                                                           best_result_so_far[0][3]))
-        del best_result_so_far[1]['epochs']
+        #del best_result_so_far[1]['epochs']
         file.write("{} {} \n".format("Configurations", best_result_so_far[1]))
         file.write("{} {}".format("Epochs", best_result_so_far[2]))
         file.close()
         return best_result_so_far
+
+    def _run_bohb_hyperband(self):
+        self.all_configs = list()
+        self.configs = dict()
+        self.losses = dict()  #validation loss
+        self.kde_models = dict()
+        self.kde_vartypes = ""
+        self.vartypes = []
+        self.cs = self._get_configspace()
+        hps = self.cs.get_hyperparameters()
+
+        for h in hps:
+
+            #if isinstance(h.upper, int):
+            #    print("check")
+            if hasattr(h, 'choices'):
+                self.kde_vartypes += 'u'
+                self.vartypes += [len(h.choices)]
+            else:
+                self.kde_vartypes += 'c'
+                self.vartypes += [0]
+
+        self.vartypes = np.array(self.vartypes, dtype=int)
+
+        file = open(self.hyperband_path + "/" + str(self.timestamp) + ".txt", "w")
+        smax = int(math.log(self.max_amount_resources, self.halving_proportion))  # default 4
+        best_result_so_far = list()
+        file.write("Hyperband parameters \n")
+        file.write("{}{} {}{} \n".format("Halving Proportion:", self.halving_proportion, "Max amount of rescources:",
+                                         self.max_amount_resources))
+        file.write("Hyperparameter ranges\n")
+        file.write("{}{} {}{} {}{} {}{} {}{} {}{} {}{} {}{} \n\n".format("Lr:", self.lr_range, "Lr deca:",
+                                                                         self.lr_decay_range, "Ref steps:",
+                                                                         self.ref_steps_range, "Ref patience:",
+                                                                         self.ref_patience_range, "Batch Size:",
+                                                                         self.batch_size_range, "Loss range:",
+                                                                         self.loss_range, "Accuracy Range:",
+                                                                         self.accuracy_range, "Optimizer Range:",
+                                                                         self.optimizer_range))
+        all_results = list()
+        for s in range(smax, -1, -1):
+            file.write("Bracket s=" + str(s) + "\n")
+
+            r = int(self.max_amount_resources * (self.halving_proportion ** -s))
+            n = int(np.floor((smax + 1) / (s + 1)) * self.halving_proportion ** s)
+
+            for i in range(0, s + 1):
+                results = list()
+                file.write("\nIteration i=" + str(i) + "\n\n")
+                ni = int(n * (self.halving_proportion ** -i))
+                ri = int(r * (self.halving_proportion ** i))
+
+                #run for 27 time
+                for x in range(1, n):
+
+                    #if enough (e.g 10) sampled, get bohb
+                    if len(results) >= len(hps)+2:
+                        next_config = self._get_bohb_conifgurations(ri)
+                    else:
+                        next_config = self._get_random_parameter_configurations()
+
+                    next_config = self._update_current_parameters(next_config, ri)
+                    print("Next config:")
+                    print(next_config)
+                    file.write(str(next_config) + " Epochs: " + str(ri) + "\n")
+                    start_time = time.time()
+                    if self.framework == 'tensorflow':
+                        self.build_tensorflow_pipeline()
+                        loss_and_acc = self._run_tensorflow_pipeline()
+                    else:
+                        self.build_pytorch_pipeline()
+                        loss_and_acc = self._run_pytorch_pipeline()
+
+                    if ri not in self.configs.keys():
+                        self.configs[ri] = []
+                        self.losses[ri] = []
+                    self.losses[ri].append(loss_and_acc[0])
+                    self.configs[ri].append(self._get_current_configs(next_config))
+
+                    file.write("{} {} {} {} {} {} {} {} {} \n".format("Result:", "Valid Loss:", loss_and_acc[0],
+                                                                      "Valid Acc:", loss_and_acc[1], "Train Loss:",
+                                                                      loss_and_acc[2], "Train Acc:", loss_and_acc[3]))
+                    elapsed_time = time.time() - start_time
+                    file.write("Time: " + str(elapsed_time) + "\n")
+                    intermediate_results = list()
+                    intermediate_results.append(loss_and_acc)
+                    intermediate_results.append(next_config)
+                    results.append(intermediate_results)
+                    all_results.append(intermediate_results)
+
+                remaining_configs = round(ni / self.halving_proportion)
+                set_of_configurations, current_results = self._get_top_configurations(results, remaining_configs)
+
+                if s == smax and i == 0:
+                    best_result_so_far.append(current_results[0])
+                    best_result_so_far.append(set_of_configurations[0])
+                    best_result_so_far.append(set_of_configurations[0]['epochs'])
+                else:
+                    if best_result_so_far[0][0] > current_results[0][0]:
+                        best_result_so_far[0] = current_results[0]
+                        best_result_so_far[1] = set_of_configurations[0]
+                        best_result_so_far[2] = set_of_configurations[0]['epochs']
+        file.write("\nBest Result:\n")
+        file.write("{} {} {} {} {} {} {} {} {} \n".format("Result:", "Valid Loss:", best_result_so_far[0][0],
+                                                          "Valid Acc:", best_result_so_far[0][1], "Train Loss:",
+                                                          best_result_so_far[0][2], "Train Acc:",
+                                                          best_result_so_far[0][3]))
+        # del best_result_so_far[1]['epochs']
+        file.write("{} {} \n".format("Configurations", best_result_so_far[1]))
+        file.write("{} {}".format("Epochs", best_result_so_far[2]))
+        file.close()
+        return best_result_so_far
+
+    def _impute_conditional_data(self, array):
+
+        return_array = np.empty_like(array)
+
+        for i in range(array.shape[0]):
+            datum = np.copy(array[i])
+            nan_indices = np.argwhere(np.isnan(datum)).flatten()
+
+            while (np.any(nan_indices)):
+                nan_idx = nan_indices[0]
+                valid_indices = np.argwhere(np.isfinite(array[:, nan_idx])).flatten()
+
+                if len(valid_indices) > 0:
+                    # pick one of them at random and overwrite all NaN values
+                    row_idx = np.random.choice(valid_indices)
+                    datum[nan_indices] = array[row_idx, nan_indices]
+
+                else:
+                    # no good point in the data has this value activated, so fill it with a valid but random value
+                    t = self.vartypes[nan_idx]
+                    if t == 0:
+                        datum[nan_idx] = np.random.rand()
+                    else:
+                        datum[nan_idx] = np.random.randint(t)
+
+                nan_indices = np.argwhere(np.isnan(datum)).flatten()
+            return_array[i, :] = datum
+        return return_array
+
+    def _get_current_configs(self, t):
+        new_t = copy.deepcopy(t)
+        del new_t['epochs']
+        conf = CS.Configuration(self.cs, new_t)
+
+        return conf.get_array()
 
     @staticmethod
     def _get_top_configurations(results, remaining_configs):
@@ -678,9 +849,9 @@ class TrainRunner(NetRunner):
     def _update_current_parameters(self, current_params, epochs):
         self.lr = current_params['lr']
         self.lr_decay = current_params['lr_decay']
-        self.ref_steps = current_params['ref_steps']
-        self.ref_patience = current_params['ref_patience']
-        self.batch_size = current_params['batch_size']
+        #self.ref_steps = current_params['ref_steps']
+        #self.ref_patience = current_params['ref_patience']
+        #self.batch_size = current_params['batch_size']
         self.loss_type = current_params['loss']
         self.accuracy_type = current_params['accuracy']
         self.optimizer = current_params['optimizer']
@@ -688,22 +859,104 @@ class TrainRunner(NetRunner):
         current_params['epochs'] = epochs
         return current_params
 
-    def _get_random_parameter_configurations(self, iterations):
-        final_config = list()
+    def _get_bohb_conifgurations(self, ri):
+
+        # Where good part stars with BO sampling
+        train_configs = np.array(self.configs[ri])
+        train_losses = np.array(self.losses[ri])
+
+        n_good = int(len(self.losses[ri])*self.top_n_percent)
+        n_bad = int(len(self.losses[ri])-n_good)
+
+        # Refit KDE for the current budget
+        idx = np.argsort(train_losses)
+
+        train_data_good = self._impute_conditional_data(train_configs[idx[:n_good]])
+        train_data_bad = self._impute_conditional_data(train_configs[idx[n_good:n_good + n_bad]])
+
+        if train_data_good.shape[0] <= train_data_good.shape[1]:
+            return self._get_random_parameter_configurations()
+        if train_data_bad.shape[0] <= train_data_bad.shape[1]:
+            return self._get_random_parameter_configurations()
+
+        bw_estimation = 'normal_reference'
+
+        bad_kde = sm.nonparametric.KDEMultivariate(data=train_data_bad, var_type=self.kde_vartypes, bw=bw_estimation)
+        good_kde = sm.nonparametric.KDEMultivariate(data=train_data_good, var_type=self.kde_vartypes, bw=bw_estimation)
+
+        bad_kde.bw = np.clip(bad_kde.bw, 1e-3, None)
+        good_kde.bw = np.clip(good_kde.bw, 1e-3, None)
+
+        self.kde_models[ri] = {
+            'good': good_kde,
+            'bad': bad_kde
+        }
+
+        #get BOHB configuration
+
+        # sample from largest budget
+        budget = max(self.kde_models.keys())
+
+        l = self.kde_models[budget]['good'].pdf
+        g = self.kde_models[budget]['bad'].pdf
+
+        minimize_me = lambda x: max(1e-32, g(x)) / max(l(x), 1e-32)
+        kde_good = self.kde_models[budget]['good']
+        best = np.inf
+        best_vector = None
+
+        for i in range(self.num_samples):
+            idx = np.random.randint(0, len(kde_good.data))
+            datum = kde_good.data[idx]
+            vector = []
+
+            for m, bw, t in zip(datum, kde_good.bw, self.vartypes):
+
+                bw = max(bw, self.min_bandwidth)
+                if t == 0:
+                    bw = self.bandwidth_factor * bw
+                    vector.append(sps.truncnorm.rvs(-m / bw, (1 - m) / bw, loc=m, scale=bw))
+                else:
+                    if np.random.rand() < (1 - bw):
+                        vector.append(int(m))
+                    else:
+                        vector.append(np.random.randint(t))
+            val = minimize_me(vector)
+
+            if val < best:
+                best = val
+                best_vector = vector
+
+        #best vector transform
+        return self._transform_bohb_configuration(best_vector)
+
+    def _transform_bohb_configuration(self, bohb_config):
+
+        for i, hp_value in enumerate(bohb_config):
+            if isinstance(
+                    self.cs.get_hyperparameter(
+                        self.cs.get_hyperparameter_by_idx(i)
+                    ),
+                    CS.hyperparameters.CategoricalHyperparameter
+            ):
+                bohb_config[i] = int(np.rint(bohb_config[i]))
+        sample = CS.Configuration(self.cs, vector=bohb_config).get_dictionary()
+
+        return sample
+
+    def _get_random_parameter_configurations(self):
         helper_dict = self.all_configs[:]
         for x in helper_dict:
             if 'epochs' in x:
                 del x['epochs']
 
-        for c in range(0, iterations):
+        current_config = self._get_random_numbers()
+        while current_config in helper_dict:
             current_config = self._get_random_numbers()
-            while current_config in helper_dict:
-                current_config = self._get_random_numbers()
-            final_config.append(current_config)
-            helper_dict.append(current_config)
-            self.all_configs.append(current_config)
+        helper_dict.append(current_config)
+        self.all_configs.append(current_config)
 
-        return final_config
+        return current_config
 
     def _get_random_numbers(self):
         current_config = dict()
@@ -712,11 +965,37 @@ class TrainRunner(NetRunner):
         current_config['lr'] = round(random_lr, len(str(self.lr_range[1])))
         random_lr_decay = np.random.uniform(self.lr_decay_range[0], self.lr_decay_range[1])
         current_config['lr_decay'] = round(random_lr_decay, len(str(self.lr_decay_range[1])))
-        current_config['ref_steps'] = random.randint(self.ref_steps_range[0], self.ref_steps_range[1])
-        current_config['ref_patience'] = random.randint(self.ref_patience_range[0], self.ref_patience_range[1])
-        current_config['batch_size'] = random.randint(self.batch_size_range[0], self.batch_size_range[1])
+        #current_config['ref_steps'] = random.randint(self.ref_steps_range[0], self.ref_steps_range[1])
+        #current_config['ref_patience'] = random.randint(self.ref_patience_range[0], self.ref_patience_range[1])
+        #current_config['batch_size'] = random.randint(self.batch_size_range[0], self.batch_size_range[1])
         current_config['loss'] = random.choice(self.loss_range)
         current_config['accuracy'] = random.choice(self.accuracy_range)
         current_config['optimizer'] = random.choice(self.optimizer_range)
 
         return current_config
+
+    def _get_configspace(self):
+        cs = CS.ConfigurationSpace()
+
+        lr = CSH.UniformFloatHyperparameter('lr', lower=self.lr_range[0], upper=self.lr_range[1],
+                                            default_value=self.lr_range[0], log=True)
+        lr_decay = CSH.UniformFloatHyperparameter('lr_decay', lower=self.lr_decay_range[0],
+                                                  upper=self.lr_decay_range[1], default_value=self.lr_decay_range[0],
+                                                  log=True)
+        #TODO find solution for Integer
+        #ref_steps = CSH.UniformIntegerHyperparameter('ref_steps', lower=self.ref_steps_range[0],
+        #                                             upper=self.ref_steps_range[1],
+        #                                             default_value=self.ref_steps_range[0], log=True)
+        #ref_patience = CSH.UniformIntegerHyperparameter('ref_patience', lower=self.ref_patience_range[0],
+        #                                                upper=self.ref_patience_range[1],
+        #                                                default_value=self.ref_patience_range[0], log=True)
+        #batch_size = CSH.UniformIntegerHyperparameter('batch_size', lower=self.batch_size_range[0],
+        #                                              upper=self.batch_size_range[1],
+        #                                              default_value=self.batch_size_range[0], log=True)
+        loss = CSH.CategoricalHyperparameter('loss', self.loss_range)
+        accuracy = CSH.CategoricalHyperparameter('accuracy', self.accuracy_range)
+        optimizer = CSH.CategoricalHyperparameter('optimizer', self.optimizer_range)
+
+        cs.add_hyperparameters([lr, lr_decay, loss, accuracy, optimizer])
+
+        return cs
