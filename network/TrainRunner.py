@@ -696,9 +696,6 @@ class TrainRunner(NetRunner):
         hps = self.cs.get_hyperparameters()
 
         for h in hps:
-
-            #if isinstance(h.upper, int):
-            #    print("check")
             if hasattr(h, 'choices'):
                 self.kde_vartypes += 'u'
                 self.vartypes += [len(h.choices)]
@@ -848,14 +845,14 @@ class TrainRunner(NetRunner):
         return new_configs, current_results
 
     def _update_current_parameters(self, current_params, epochs):
-        self.lr = current_params['lr']
-        self.lr_decay = current_params['lr_decay']
+        #self.lr = current_params['lr']
+        #self.lr_decay = current_params['lr_decay']
         self.ref_steps = current_params['ref_steps']
         self.ref_patience = current_params['ref_patience']
         self.batch_size = current_params['batch_size']
-        self.loss_type = current_params['loss']
-        self.accuracy_type = current_params['accuracy']
-        self.optimizer = current_params['optimizer']
+        #self.loss_type = current_params['loss']
+        #self.accuracy_type = current_params['accuracy']
+        #self.optimizer = current_params['optimizer']
         self.num_epochs = epochs
         current_params['epochs'] = epochs
         return current_params
@@ -962,41 +959,48 @@ class TrainRunner(NetRunner):
     def _get_random_numbers(self):
         current_config = dict()
 
-        random_lr = np.random.uniform(self.lr_range[0], self.lr_range[1])
-        current_config['lr'] = round(random_lr, len(str(self.lr_range[1])))
-        random_lr_decay = np.random.uniform(self.lr_decay_range[0], self.lr_decay_range[1])
-        current_config['lr_decay'] = round(random_lr_decay, len(str(self.lr_decay_range[1])))
+        #random_lr = np.random.uniform(self.lr_range[0], self.lr_range[1])
+        #current_config['lr'] = round(random_lr, len(str(self.lr_range[1])))
+        #random_lr_decay = np.random.uniform(self.lr_decay_range[0], self.lr_decay_range[1])
+        #current_config['lr_decay'] = round(random_lr_decay, len(str(self.lr_decay_range[1])))
         current_config['ref_steps'] = random.randint(self.ref_steps_range[0], self.ref_steps_range[1])
         current_config['ref_patience'] = random.randint(self.ref_patience_range[0], self.ref_patience_range[1])
         current_config['batch_size'] = random.randint(self.batch_size_range[0], self.batch_size_range[1])
-        current_config['loss'] = random.choice(self.loss_range)
-        current_config['accuracy'] = random.choice(self.accuracy_range)
-        current_config['optimizer'] = random.choice(self.optimizer_range)
+        #current_config['loss'] = random.choice(self.loss_range)
+        #current_config['accuracy'] = random.choice(self.accuracy_range)
+        #current_config['optimizer'] = random.choice(self.optimizer_range)
 
         return current_config
 
     def _get_configspace(self):
         cs = CS.ConfigurationSpace()
 
-        lr = CSH.UniformFloatHyperparameter('lr', lower=self.lr_range[0], upper=self.lr_range[1],
-                                            default_value=self.lr_range[0], log=True)
-        lr_decay = CSH.UniformFloatHyperparameter('lr_decay', lower=self.lr_decay_range[0],
-                                                  upper=self.lr_decay_range[1], default_value=self.lr_decay_range[0],
-                                                  log=True)
-        #TODO find solution for Integer
-        #ref_steps = CSH.UniformIntegerHyperparameter('ref_steps', lower=self.ref_steps_range[0],
-        #                                             upper=self.ref_steps_range[1],
-        #                                             default_value=self.ref_steps_range[0], log=True)
-        #ref_patience = CSH.UniformIntegerHyperparameter('ref_patience', lower=self.ref_patience_range[0],
-        #                                                upper=self.ref_patience_range[1],
-        #                                                default_value=self.ref_patience_range[0], log=True)
-        #batch_size = CSH.UniformIntegerHyperparameter('batch_size', lower=self.batch_size_range[0],
-        #                                              upper=self.batch_size_range[1],
-        #                                              default_value=self.batch_size_range[0], log=True)
-        loss = CSH.CategoricalHyperparameter('loss', self.loss_range)
-        accuracy = CSH.CategoricalHyperparameter('accuracy', self.accuracy_range)
-        optimizer = CSH.CategoricalHyperparameter('optimizer', self.optimizer_range)
+        #lr = CSH.UniformFloatHyperparameter('lr', lower=self.lr_range[0], upper=self.lr_range[1],
+       #                                     default_value=self.lr_range[0], log=True)
+        #lr_decay = CSH.UniformFloatHyperparameter('lr_decay', lower=self.lr_decay_range[0],
+        #                                          upper=self.lr_decay_range[1], default_value=self.lr_decay_range[0],
+         #                                         log=True)
+        #Transform sequential integer to choices
+        ref_steps = CSH.CategoricalHyperparameter('ref_steps',
+                                                  self._transform_to_configspace_choices(self.ref_steps_range))
+        ref_patience = CSH.CategoricalHyperparameter('ref_patience',
+                                                     self._transform_to_configspace_choices(self.ref_patience_range))
+        batch_size = CSH.CategoricalHyperparameter('batch_size',
+                                                   self._transform_to_configspace_choices(self.batch_size_range))
+        #loss = CSH.CategoricalHyperparameter('loss', self.loss_range)
+        #accuracy = CSH.CategoricalHyperparameter('accuracy', self.accuracy_range)
+        #optimizer = CSH.CategoricalHyperparameter('optimizer', self.optimizer_range)
 
-        cs.add_hyperparameters([lr, lr_decay, loss, accuracy, optimizer])
+        #cs.add_hyperparameters([lr, lr_decay, ref_steps, ref_patience, batch_size, loss, accuracy, optimizer])
+        cs.add_hyperparameters([ref_steps, ref_patience, batch_size])
 
         return cs
+
+    @staticmethod
+    def _transform_to_configspace_choices(bounds):
+        lower = bounds[0]
+        upper = bounds[1]
+        choices = list()
+        for i in range(lower, upper+1):
+            choices.append(i)
+        return choices

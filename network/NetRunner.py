@@ -98,9 +98,10 @@ class NetRunner:
             self.accuracy_range = args.accuracy_range
             self.optimizer_range = args.optimizer_range
             if args.bohb:
-                self.min_points_in_model = args.min_points_in_model
+                self.num_samples = args.num_samples
                 self.bandwidth_factor = args.bandwidth_factor
                 self.top_n_percent = args.top_n_percent
+                self.min_bandwidth = args.min_bandwidth
 
         if not self.is_training:
             self.class_labels = args.class_labels
