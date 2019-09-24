@@ -795,6 +795,7 @@ class TrainRunner(NetRunner):
         return best_result_so_far
 
     def _impute_conditional_data(self, array):
+        # https://github.com/automl/HpBandSter/blob/master/hpbandster/optimizers/config_generators/bohb.py
 
         return_array = np.empty_like(array)
 
@@ -830,36 +831,23 @@ class TrainRunner(NetRunner):
 
         return conf.get_array()
 
-    @staticmethod
-    def _get_top_configurations(results, remaining_configs):
-        new_configs = list()
-        current_results = list()
-        results.sort()
-
-        if remaining_configs > 0:
-            results = results[:remaining_configs]
-        for result in results:
-            current_results.append(result[0])
-            new_configs.append(result[1])
-
-        return new_configs, current_results
-
     def _update_current_parameters(self, current_params, epochs):
-        #self.lr = current_params['lr']
-        #self.lr_decay = current_params['lr_decay']
+        self.lr = current_params['lr']
+        self.lr_decay = current_params['lr_decay']
         self.ref_steps = current_params['ref_steps']
         self.ref_patience = current_params['ref_patience']
         self.batch_size = current_params['batch_size']
-        #self.loss_type = current_params['loss']
-        #self.accuracy_type = current_params['accuracy']
-        #self.optimizer = current_params['optimizer']
+        self.loss_type = current_params['loss']
+        self.accuracy_type = current_params['accuracy']
+        self.optimizer = current_params['optimizer']
         self.num_epochs = epochs
         current_params['epochs'] = epochs
         return current_params
 
     def _get_bohb_conifgurations(self, ri):
+        # following BOHB implementation has been taken from
+        # https://github.com/automl/HpBandSter/blob/master/hpbandster/optimizers/config_generators/bohb.py
 
-        # Where good part stars with BO sampling
         train_configs = np.array(self.configs[ri])
         train_losses = np.array(self.losses[ri])
 
@@ -872,13 +860,14 @@ class TrainRunner(NetRunner):
         train_data_good = self._impute_conditional_data(train_configs[idx[:n_good]])
         train_data_bad = self._impute_conditional_data(train_configs[idx[n_good:n_good + n_bad]])
 
+        # Not enough samples for fitting it to KDEMulitvariate
         if train_data_good.shape[0] <= train_data_good.shape[1]:
             return self._get_random_parameter_configurations()
         if train_data_bad.shape[0] <= train_data_bad.shape[1]:
             return self._get_random_parameter_configurations()
 
         bw_estimation = 'normal_reference'
-
+        # https://github.com/statsmodels/statsmodels/blob/master/statsmodels/nonparametric/kernel_density.py
         bad_kde = sm.nonparametric.KDEMultivariate(data=train_data_bad, var_type=self.kde_vartypes, bw=bw_estimation)
         good_kde = sm.nonparametric.KDEMultivariate(data=train_data_good, var_type=self.kde_vartypes, bw=bw_estimation)
 
@@ -890,15 +879,13 @@ class TrainRunner(NetRunner):
             'bad': bad_kde
         }
 
-        #get BOHB configuration
-
         # sample from largest budget
         budget = max(self.kde_models.keys())
 
         l = self.kde_models[budget]['good'].pdf
         g = self.kde_models[budget]['bad'].pdf
-
         minimize_me = lambda x: max(1e-32, g(x)) / max(l(x), 1e-32)
+
         kde_good = self.kde_models[budget]['good']
         best = np.inf
         best_vector = None
@@ -925,11 +912,11 @@ class TrainRunner(NetRunner):
                 best = val
                 best_vector = vector
 
-        #best vector transform
         return self._transform_bohb_configuration(best_vector)
 
     def _transform_bohb_configuration(self, bohb_config):
-
+        # transforms best vector found from bohb configuration into original dict
+        # https://github.com/automl/HpBandSter/blob/master/hpbandster/optimizers/config_generators/bohb.py
         for i, hp_value in enumerate(bohb_config):
             if isinstance(
                     self.cs.get_hyperparameter(
@@ -949,7 +936,7 @@ class TrainRunner(NetRunner):
                 del x['epochs']
 
         current_config = self._get_random_numbers()
-        while current_config in helper_dict:
+        while current_config in helper_dict:  # check if current random config already exists
             current_config = self._get_random_numbers()
         helper_dict.append(current_config)
         self.all_configs.append(current_config)
@@ -959,42 +946,55 @@ class TrainRunner(NetRunner):
     def _get_random_numbers(self):
         current_config = dict()
 
-        #random_lr = np.random.uniform(self.lr_range[0], self.lr_range[1])
-        #current_config['lr'] = round(random_lr, len(str(self.lr_range[1])))
-        #random_lr_decay = np.random.uniform(self.lr_decay_range[0], self.lr_decay_range[1])
-        #current_config['lr_decay'] = round(random_lr_decay, len(str(self.lr_decay_range[1])))
+        random_lr = np.random.uniform(self.lr_range[0], self.lr_range[1])
+        current_config['lr'] = round(random_lr, len(str(self.lr_range[1])))
+        random_lr_decay = np.random.uniform(self.lr_decay_range[0], self.lr_decay_range[1])
+        current_config['lr_decay'] = round(random_lr_decay, len(str(self.lr_decay_range[1])))
         current_config['ref_steps'] = random.randint(self.ref_steps_range[0], self.ref_steps_range[1])
         current_config['ref_patience'] = random.randint(self.ref_patience_range[0], self.ref_patience_range[1])
         current_config['batch_size'] = random.randint(self.batch_size_range[0], self.batch_size_range[1])
-        #current_config['loss'] = random.choice(self.loss_range)
-        #current_config['accuracy'] = random.choice(self.accuracy_range)
-        #current_config['optimizer'] = random.choice(self.optimizer_range)
+        current_config['loss'] = random.choice(self.loss_range)
+        current_config['accuracy'] = random.choice(self.accuracy_range)
+        current_config['optimizer'] = random.choice(self.optimizer_range)
 
         return current_config
 
     def _get_configspace(self):
         cs = CS.ConfigurationSpace()
 
-        #lr = CSH.UniformFloatHyperparameter('lr', lower=self.lr_range[0], upper=self.lr_range[1],
-       #                                     default_value=self.lr_range[0], log=True)
-        #lr_decay = CSH.UniformFloatHyperparameter('lr_decay', lower=self.lr_decay_range[0],
-        #                                          upper=self.lr_decay_range[1], default_value=self.lr_decay_range[0],
-         #                                         log=True)
-        #Transform sequential integer to choices
+        lr = CSH.UniformFloatHyperparameter('lr', lower=self.lr_range[0], upper=self.lr_range[1],
+                                             default_value=self.lr_range[0], log=True)
+        lr_decay = CSH.UniformFloatHyperparameter('lr_decay', lower=self.lr_decay_range[0],
+                                                  upper=self.lr_decay_range[1], default_value=self.lr_decay_range[0],
+                                                 log=True)
+        # IntegerHyperparameter cannot take 0 as lower bound, transform sequential integer to choices,
         ref_steps = CSH.CategoricalHyperparameter('ref_steps',
                                                   self._transform_to_configspace_choices(self.ref_steps_range))
         ref_patience = CSH.CategoricalHyperparameter('ref_patience',
                                                      self._transform_to_configspace_choices(self.ref_patience_range))
         batch_size = CSH.CategoricalHyperparameter('batch_size',
                                                    self._transform_to_configspace_choices(self.batch_size_range))
-        #loss = CSH.CategoricalHyperparameter('loss', self.loss_range)
-        #accuracy = CSH.CategoricalHyperparameter('accuracy', self.accuracy_range)
-        #optimizer = CSH.CategoricalHyperparameter('optimizer', self.optimizer_range)
+        loss = CSH.CategoricalHyperparameter('loss', self.loss_range)
+        accuracy = CSH.CategoricalHyperparameter('accuracy', self.accuracy_range)
+        optimizer = CSH.CategoricalHyperparameter('optimizer', self.optimizer_range)
 
-        #cs.add_hyperparameters([lr, lr_decay, ref_steps, ref_patience, batch_size, loss, accuracy, optimizer])
-        cs.add_hyperparameters([ref_steps, ref_patience, batch_size])
+        cs.add_hyperparameters([lr, lr_decay, ref_steps, ref_patience, batch_size, loss, accuracy, optimizer])
 
         return cs
+
+    @staticmethod
+    def _get_top_configurations(results, remaining_configs):
+        new_configs = list()
+        current_results = list()
+        results.sort()
+
+        if remaining_configs > 0:
+            results = results[:remaining_configs]
+        for result in results:
+            current_results.append(result[0])
+            new_configs.append(result[1])
+
+        return new_configs, current_results
 
     @staticmethod
     def _transform_to_configspace_choices(bounds):
