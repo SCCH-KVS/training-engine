@@ -21,12 +21,10 @@ import h5py
 import json
 import math
 import copy
-import tf2onnx
 import numpy as np
 import random
 import tensorflow as tf
 from tqdm import tqdm
-# import tensorflow.contrib.slim as slim
 import statsmodels.api as sm
 import ConfigSpace as CS
 import ConfigSpace.hyperparameters as CSH
@@ -39,17 +37,8 @@ from utils.gradcam.GradCAM import grad_cam_plus_plus as gradcam
 
 import torch
 from torch.autograd import Variable
-from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR, _LRScheduler
+from torch.optim.lr_scheduler import ReduceLROnPlateau, _LRScheduler
 import torch.onnx as torch_onnx
-
-
-class WarmUpLR(_LRScheduler):
-    def __init__(self, optimizer, total_iters, last_epoch=-1):
-        self.total_iters = total_iters
-        super().__init__(optimizer, last_epoch)
-
-    def get_lr(self):
-        return [base_lr * self.last_epoch / (self.total_iters + 1e-8) for base_lr in self.base_lrs]
 
 
 class TrainRunner(NetRunner):
@@ -71,10 +60,7 @@ class TrainRunner(NetRunner):
         if self.framework == 'tensorflow':
             os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
             if self.hyperband:
-                if self.bohb:
-                    best_configuration = self._run_bohb_hyperband()
-                else:
-                    best_configuration = self._run_hyperband()
+                best_configuration = self._run_hyperband()
                 return best_configuration
             else:
                 self.build_tensorflow_pipeline()
@@ -82,10 +68,7 @@ class TrainRunner(NetRunner):
                 return valid_loss_final
         elif self.framework == 'pytorch':
             if self.hyperband:
-                if self.bohb:
-                    best_configuration = self._run_bohb_hyperband()
-                else:
-                    best_configuration = self._run_hyperband()
+                best_configuration = self._run_hyperband()
                 return best_configuration
             else:
                 self.build_pytorch_pipeline()
@@ -607,6 +590,27 @@ class TrainRunner(NetRunner):
 
     def _run_hyperband(self):
         self.all_configs = list()
+
+        if self.bohb:
+            self.configs = dict()
+            self.losses = dict()  # validation loss
+            self.kde_models = dict()
+            self.kde_vartypes = ""
+            self.vartypes = []
+            self.cs = self._get_configspace()
+            hps = self.cs.get_hyperparameters()
+
+            for h in hps:
+                if hasattr(h, 'choices'):
+                    self.kde_vartypes += 'u'
+                    self.vartypes += [len(h.choices)]
+                else:
+                    self.kde_vartypes += 'c'
+                    self.vartypes += [0]
+
+            self.vartypes = np.array(self.vartypes, dtype=int)
+            all_results = list()
+
         file = open(self.hyperband_path+"/"+str(self.timestamp)+".txt", "w")
         smax = int(math.log(self.max_amount_resources, self.halving_proportion))  # default 4
         best_result_so_far = list()
@@ -628,18 +632,19 @@ class TrainRunner(NetRunner):
             r = int(self.max_amount_resources * (self.halving_proportion ** -s))
             n = int(np.floor((smax + 1) / (s + 1)) * self.halving_proportion ** s)
 
-            s
-
             for i in range(0, s+1):
                 results = list()
                 file.write("\nIteration i=" + str(i) + "\n\n")
                 ni = int(n * (self.halving_proportion ** -i))
                 ri = int(r*(self.halving_proportion**i))
 
-                #print("{}: {} : {}: {} : {}: {} : {}: {}".format("Bracket", s, "Round", i, "Ni", ni, "Ri", ri))
-
                 for x in range(1, n):
-                    next_config = self._get_random_parameter_configurations()
+
+                    if self.bohb and len(results) >= len(hps)+2:
+                        next_config = self._get_bohb_conifgurations(ri)
+                    else:
+                        next_config = self._get_random_parameter_configurations()
+
                     next_config = self._update_current_parameters(next_config, ri)
                     print("Next config:")
                     print(next_config)
@@ -651,6 +656,14 @@ class TrainRunner(NetRunner):
                     else:
                         self.build_pytorch_pipeline()
                         loss_and_acc = self._run_pytorch_pipeline()
+
+                    if self.bohb:
+                        if ri not in self.configs.keys():
+                            self.configs[ri] = []
+                            self.losses[ri] = []
+                        self.losses[ri].append(loss_and_acc[0])
+                        self.configs[ri].append(self._get_current_configs(next_config))
+
                     file.write("{} {} {} {} {} {} {} {} {} \n".format("Result:", "Valid Loss:", loss_and_acc[0],
                                                                       "Valid Acc:", loss_and_acc[1], "Train Loss:",
                                                                       loss_and_acc[2], "Train Acc:", loss_and_acc[3]))
@@ -660,6 +673,8 @@ class TrainRunner(NetRunner):
                     intermediate_results.append(loss_and_acc)
                     intermediate_results.append(next_config)
                     results.append(intermediate_results)
+                    if self.bohb:
+                        all_results.append(intermediate_results)
 
                 remaining_configs = round(ni/self.halving_proportion)
                 set_of_configurations, current_results = self._get_top_configurations(results, remaining_configs)
@@ -680,115 +695,6 @@ class TrainRunner(NetRunner):
                                                           best_result_so_far[0][2], "Train Acc:",
                                                           best_result_so_far[0][3]))
         #del best_result_so_far[1]['epochs']
-        file.write("{} {} \n".format("Configurations", best_result_so_far[1]))
-        file.write("{} {}".format("Epochs", best_result_so_far[2]))
-        file.close()
-        return best_result_so_far
-
-    def _run_bohb_hyperband(self):
-        self.all_configs = list()
-        self.configs = dict()
-        self.losses = dict()  #validation loss
-        self.kde_models = dict()
-        self.kde_vartypes = ""
-        self.vartypes = []
-        self.cs = self._get_configspace()
-        hps = self.cs.get_hyperparameters()
-
-        for h in hps:
-            if hasattr(h, 'choices'):
-                self.kde_vartypes += 'u'
-                self.vartypes += [len(h.choices)]
-            else:
-                self.kde_vartypes += 'c'
-                self.vartypes += [0]
-
-        self.vartypes = np.array(self.vartypes, dtype=int)
-
-        file = open(self.hyperband_path + "/" + str(self.timestamp) + ".txt", "w")
-        smax = int(math.log(self.max_amount_resources, self.halving_proportion))  # default 4
-        best_result_so_far = list()
-        file.write("Hyperband parameters \n")
-        file.write("{}{} {}{} \n".format("Halving Proportion:", self.halving_proportion, "Max amount of rescources:",
-                                         self.max_amount_resources))
-        file.write("Hyperparameter ranges\n")
-        file.write("{}{} {}{} {}{} {}{} {}{} {}{} {}{} {}{} \n\n".format("Lr:", self.lr_range, "Lr deca:",
-                                                                         self.lr_decay_range, "Ref steps:",
-                                                                         self.ref_steps_range, "Ref patience:",
-                                                                         self.ref_patience_range, "Batch Size:",
-                                                                         self.batch_size_range, "Loss range:",
-                                                                         self.loss_range, "Accuracy Range:",
-                                                                         self.accuracy_range, "Optimizer Range:",
-                                                                         self.optimizer_range))
-        all_results = list()
-        for s in range(smax, -1, -1):
-            file.write("Bracket s=" + str(s) + "\n")
-
-            r = int(self.max_amount_resources * (self.halving_proportion ** -s))
-            n = int(np.floor((smax + 1) / (s + 1)) * self.halving_proportion ** s)
-
-            for i in range(0, s + 1):
-                results = list()
-                file.write("\nIteration i=" + str(i) + "\n\n")
-                ni = int(n * (self.halving_proportion ** -i))
-                ri = int(r * (self.halving_proportion ** i))
-
-                #run for 27 time
-                for x in range(1, n):
-
-                    #if enough (e.g 10) sampled, get bohb
-                    if len(results) >= len(hps)+2:
-                        next_config = self._get_bohb_conifgurations(ri)
-                    else:
-                        next_config = self._get_random_parameter_configurations()
-
-                    next_config = self._update_current_parameters(next_config, ri)
-                    print("Next config:")
-                    print(next_config)
-                    file.write(str(next_config) + " Epochs: " + str(ri) + "\n")
-                    start_time = time.time()
-                    if self.framework == 'tensorflow':
-                        self.build_tensorflow_pipeline()
-                        loss_and_acc = self._run_tensorflow_pipeline()
-                    else:
-                        self.build_pytorch_pipeline()
-                        loss_and_acc = self._run_pytorch_pipeline()
-
-                    if ri not in self.configs.keys():
-                        self.configs[ri] = []
-                        self.losses[ri] = []
-                    self.losses[ri].append(loss_and_acc[0])
-                    self.configs[ri].append(self._get_current_configs(next_config))
-
-                    file.write("{} {} {} {} {} {} {} {} {} \n".format("Result:", "Valid Loss:", loss_and_acc[0],
-                                                                      "Valid Acc:", loss_and_acc[1], "Train Loss:",
-                                                                      loss_and_acc[2], "Train Acc:", loss_and_acc[3]))
-                    elapsed_time = time.time() - start_time
-                    file.write("Time: " + str(elapsed_time) + "\n")
-                    intermediate_results = list()
-                    intermediate_results.append(loss_and_acc)
-                    intermediate_results.append(next_config)
-                    results.append(intermediate_results)
-                    all_results.append(intermediate_results)
-
-                remaining_configs = round(ni / self.halving_proportion)
-                set_of_configurations, current_results = self._get_top_configurations(results, remaining_configs)
-
-                if s == smax and i == 0:
-                    best_result_so_far.append(current_results[0])
-                    best_result_so_far.append(set_of_configurations[0])
-                    best_result_so_far.append(set_of_configurations[0]['epochs'])
-                else:
-                    if best_result_so_far[0][0] > current_results[0][0]:
-                        best_result_so_far[0] = current_results[0]
-                        best_result_so_far[1] = set_of_configurations[0]
-                        best_result_so_far[2] = set_of_configurations[0]['epochs']
-        file.write("\nBest Result:\n")
-        file.write("{} {} {} {} {} {} {} {} {} \n".format("Result:", "Valid Loss:", best_result_so_far[0][0],
-                                                          "Valid Acc:", best_result_so_far[0][1], "Train Loss:",
-                                                          best_result_so_far[0][2], "Train Acc:",
-                                                          best_result_so_far[0][3]))
-        # del best_result_so_far[1]['epochs']
         file.write("{} {} \n".format("Configurations", best_result_so_far[1]))
         file.write("{} {}".format("Epochs", best_result_so_far[2]))
         file.close()
