@@ -23,6 +23,7 @@ import math
 import copy
 import numpy as np
 import random
+import json
 import tensorflow as tf
 from tqdm import tqdm
 import statsmodels.api as sm
@@ -373,7 +374,6 @@ class TrainRunner(NetRunner):
             return valid_aver_loss, epoch_acc_str_val, train_aver_loss, epoch_acc_str_tr
 
     def _run_pytorch_pipeline(self):
-        warmup_scheduler = WarmUpLR(self.train_op, self.batch_size)
         h5_file = h5py.File(self.h5_data_file, 'r')
 
         with open(self.json_log, 'r') as f:
@@ -435,11 +435,6 @@ class TrainRunner(NetRunner):
                 # print([self.img_size[0], self.img_size[1], self.img_size[2]])
 
                 for i in tqdm(train_generator, total=train_lim, unit=' steps', desc='Epoch {:d} train'.format(epoch)):
-                    if epoch <= 1:
-                        warmup_scheduler.step()
-                        self.train_op = warmup_scheduler.optimizer
-                        if self.train_op.param_groups[0]['lr'] > self.learning_rate:
-                            self.train_op.param_groups[0]['lr'] = self.learning_rate
 
                     total_recall_counter_train += 1
                     # start_time = time.time()
@@ -589,14 +584,19 @@ class TrainRunner(NetRunner):
                 return prev_loss
 
     def _run_hyperband(self):
+        global_start_time = time.time()
         self.all_configs = list()
+        smax = int(math.log(self.max_amount_resources, self.halving_proportion))  # default 4
+        best_result_so_far = list()
 
+        # create additional variables for bohb
         if self.bohb:
             self.configs = dict()
             self.losses = dict()  # validation loss
             self.kde_models = dict()
             self.kde_vartypes = ""
             self.vartypes = []
+            # get hyperparameters/config space
             self.cs = self._get_configspace()
             hps = self.cs.get_hyperparameters()
 
@@ -609,46 +609,53 @@ class TrainRunner(NetRunner):
                     self.vartypes += [0]
 
             self.vartypes = np.array(self.vartypes, dtype=int)
-            all_results = list()
 
-        file = open(self.hyperband_path+"/"+str(self.timestamp)+".txt", "w")
-        smax = int(math.log(self.max_amount_resources, self.halving_proportion))  # default 4
-        best_result_so_far = list()
-        file.write("Hyperband parameters \n")
-        file.write("{}{} {}{} \n".format("Halving Proportion:", self.halving_proportion, "Max amount of rescources:",
-                                           self.max_amount_resources))
-        file.write("Hyperparameter ranges\n")
-        file.write("{}{} {}{} {}{} {}{} {}{} {}{} {}{} {}{} \n\n".format("Lr:", self.lr_range, "Lr deca:",
-                                                                         self.lr_decay_range, "Ref steps:",
-                                                                         self.ref_steps_range, "Ref patience:",
-                                                                         self.ref_patience_range, "Batch Size:",
-                                                                         self.batch_size_range, "Loss range:",
-                                                                         self.loss_range, "Accuracy Range:",
-                                                                         self.accuracy_range, "Optimizer Range:",
-                                                                         self.optimizer_range))
+        # create file for saving hyperband and bohb results
+        file = open(self.hyperband_path+"/"+str(self.timestamp)+".json", "w")
+        json_data = list()
+        hb_prameters = dict()
+        hb_prameters['lr'] = self.lr_range
+        hb_prameters['lr_decay'] = self.lr_decay_range
+        hb_prameters['ref_steps'] = self.ref_steps_range
+        hb_prameters['ref_patience'] = self.ref_patience_range
+        hb_prameters['batch'] = self.batch_size_range
+        hb_prameters['loss'] = self.loss_range
+        hb_prameters['accuracy'] = self.accuracy_range
+        hb_prameters['optimizer'] = self.optimizer_range
+        json_data.append(hb_prameters)
+        json_runs = list()
+
+        set_of_configurations = list()
+
         for s in range(smax, -1, -1):
-            file.write("Bracket s="+str(s) + "\n")
-
             r = int(self.max_amount_resources * (self.halving_proportion ** -s))
             n = int(np.floor((smax + 1) / (s + 1)) * self.halving_proportion ** s)
 
             for i in range(0, s+1):
                 results = list()
-                file.write("\nIteration i=" + str(i) + "\n\n")
                 ni = int(n * (self.halving_proportion ** -i))
                 ri = int(r*(self.halving_proportion**i))
 
-                for x in range(1, n):
+                for x in range(0, n):
+
+                    json_run = list()
+                    json_stats = dict()
+                    json_stats['Bracket'] = s
+                    json_stats['Iteration'] = i
+                    json_stats['Epochs'] = ri
+                    json_run.append(json_stats)
 
                     if self.bohb and len(results) >= len(hps)+2:
                         next_config = self._get_bohb_conifgurations(ri)
+                    elif i > 0:
+                        next_config = set_of_configurations[x]
                     else:
                         next_config = self._get_random_parameter_configurations()
 
                     next_config = self._update_current_parameters(next_config, ri)
                     print("Next config:")
                     print(next_config)
-                    file.write(str(next_config) + " Epochs: "+str(ri)+"\n")
+                    json_run.append(next_config)
                     start_time = time.time()
                     if self.framework == 'tensorflow':
                         self.build_tensorflow_pipeline()
@@ -657,6 +664,13 @@ class TrainRunner(NetRunner):
                         self.build_pytorch_pipeline()
                         loss_and_acc = self._run_pytorch_pipeline()
 
+                    json_loss_acc = dict()
+                    json_loss_acc['valid_loss'] = loss_and_acc[0]
+                    json_loss_acc['train_loss'] = loss_and_acc[2]
+                    json_loss_acc['valid_acc'] = loss_and_acc[1]
+                    json_loss_acc['train_acc'] = loss_and_acc[3]
+                    json_run.append(json_loss_acc)
+
                     if self.bohb:
                         if ri not in self.configs.keys():
                             self.configs[ri] = []
@@ -664,40 +678,48 @@ class TrainRunner(NetRunner):
                         self.losses[ri].append(loss_and_acc[0])
                         self.configs[ri].append(self._get_current_configs(next_config))
 
-                    file.write("{} {} {} {} {} {} {} {} {} \n".format("Result:", "Valid Loss:", loss_and_acc[0],
-                                                                      "Valid Acc:", loss_and_acc[1], "Train Loss:",
-                                                                      loss_and_acc[2], "Train Acc:", loss_and_acc[3]))
                     elapsed_time = time.time() - start_time
-                    file.write("Time: "+str(elapsed_time)+"\n")
+                    json_time = dict()
+                    json_time['Time'] = elapsed_time
+                    json_run.append(json_time)
+
                     intermediate_results = list()
                     intermediate_results.append(loss_and_acc)
                     intermediate_results.append(next_config)
                     results.append(intermediate_results)
-                    if self.bohb:
-                        all_results.append(intermediate_results)
+                    json_runs.append(json_run)
 
                 remaining_configs = round(ni/self.halving_proportion)
                 set_of_configurations, current_results = self._get_top_configurations(results, remaining_configs)
 
+                # check for the best result so far
                 if s == smax and i == 0:
                     best_result_so_far.append(current_results[0])
                     best_result_so_far.append(set_of_configurations[0])
-                    best_result_so_far.append(set_of_configurations[0]['epochs'])
                 else:
                     if best_result_so_far[0][0] > current_results[0][0]:
                         best_result_so_far[0] = current_results[0]
                         best_result_so_far[1] = set_of_configurations[0]
-                        best_result_so_far[2] = set_of_configurations[0]['epochs']
 
-        file.write("\nBest Result:\n")
-        file.write("{} {} {} {} {} {} {} {} {} \n".format("Result:", "Valid Loss:", best_result_so_far[0][0],
-                                                          "Valid Acc:", best_result_so_far[0][1], "Train Loss:",
-                                                          best_result_so_far[0][2], "Train Acc:",
-                                                          best_result_so_far[0][3]))
-        #del best_result_so_far[1]['epochs']
-        file.write("{} {} \n".format("Configurations", best_result_so_far[1]))
-        file.write("{} {}".format("Epochs", best_result_so_far[2]))
-        file.close()
+        json_data.append(json_runs)
+        json_best_result = list()
+        json_best_result_outcome = dict()
+        json_best_result_outcome['valid_loss'] = best_result_so_far[0][0]
+        json_best_result_outcome['train_loss'] = best_result_so_far[0][2]
+        json_best_result_outcome['valid_acc'] = best_result_so_far[0][1]
+        json_best_result_outcome['train_acc'] = best_result_so_far[0][3]
+        json_best_result_config = best_result_so_far[1]
+        json_best_result.append(json_best_result_outcome)
+        json_best_result.append(json_best_result_config)
+        json_data.append(json_best_result)
+
+        global_elapsed_time = time.time() - start_time
+        json_global_time = dict()
+        json_global_time['total_time'] = global_elapsed_time
+        json_data.append(json_global_time)
+
+        json.dump(json_data, file)
+
         return best_result_so_far
 
     def _impute_conditional_data(self, array):
