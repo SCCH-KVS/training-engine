@@ -1,0 +1,46 @@
+Hyperband parameters 
+Halving Proportion:3 Max amount of rescources:20 
+Hyperparameter ranges
+Lr:[0.1, 1e-05] Lr deca:[0.1, 1e-05] Ref steps:[0, 6] Ref patience:[0, 6] Batch Size:[10, 512] Loss range:['softmax', 'sigmoid', 'margin'] Accuracy Range:['percent'] Optimizer Range:['adam', 'momentum', 'gradient'] 
+
+Bracket s=2
+
+Iteration i=0
+
+{'lr': 0.05328, 'lr_decay': 0.09304, 'ref_steps': 1, 'ref_patience': 3, 'batch_size': 333, 'loss': 'softmax', 'accuracy': 'percent', 'optimizer': 'momentum', 'epochs': 2} Epochs: 2
+Result: Valid Loss: 2.301344014349438 Valid Acc: percentlbl: 0.112  Train Loss: 2.302032400060583 Train Acc: percentlbl: 0.109  
+Time: 76.38206815719604
+{'lr': 0.07522, 'lr_decay': 0.05383, 'ref_steps': 5, 'ref_patience': 0, 'batch_size': 92, 'loss': 'margin', 'accuracy': 'percent', 'optimizer': 'gradient', 'epochs': 2} Epochs: 2
+Result: Valid Loss: nan Valid Acc: percentlbl: 0.099  Train Loss: nan Train Acc: percentlbl: 0.098  
+Time: 75.7529513835907
+{'lr': 0.08979, 'lr_decay': 0.03723, 'ref_steps': 0, 'ref_patience': 3, 'batch_size': 118, 'loss': 'softmax', 'accuracy': 'percent', 'optimizer': 'adam', 'epochs': 2} Epochs: 2
+Result: Valid Loss: 1.0344891339960232 Valid Acc: percentlbl: 0.667  Train Loss: 1.1864996968131316 Train Acc: percentlbl: 0.611  
+Time: 76.59440732002258
+{'lr': 0.09706, 'lr_decay': 0.08861, 'ref_steps': 5, 'ref_patience': 6, 'batch_size': 70, 'loss': 'sigmoid', 'accuracy': 'percent', 'optimizer': 'momentum', 'epochs': 2} Epochs: 2
+Result: Valid Loss: 0.3249411949515343 Valid Acc: percentlbl: 0.113  Train Loss: 0.3250133077458185 Train Acc: percentlbl: 0.109  
+Time: 79.02684044837952
+{'lr': 0.09586, 'lr_decay': 0.08348, 'ref_steps': 6, 'ref_patience': 3, 'batch_size': 298, 'loss': 'sigmoid', 'accuracy': 'percent', 'optimizer': 'momentum', 'epochs': 2} Epochs: 2
+Result: Valid Loss: 0.3249929860234261 Valid Acc: percentlbl: 0.113  Train Loss: 0.3250580295920372 Train Acc: percentlbl: 0.106  
+Time: 72.82714033126831
+{'lr': 0.01891, 'lr_decay': 0.0023, 'ref_steps': 6, 'ref_patience': 3, 'batch_size': 435, 'loss': 'sigmoid', 'accuracy': 'percent', 'optimizer': 'momentum', 'epochs': 2} Epochs: 2
+Result: Valid Loss: 0.3253062308455507 Valid Acc: percentlbl: 0.114  Train Loss: 0.3271756935410383 Train Acc: percentlbl: 0.109  
+Time: 72.18551301956177
+{'lr': 0.0501, 'lr_decay': 0.096, 'ref_steps': 4, 'ref_patience': 6, 'batch_size': 385, 'loss': 'margin', 'accuracy': 'percent', 'optimizer': 'gradient', 'epochs': 2} Epochs: 2
+Result: Valid Loss: nan Valid Acc: percentlbl: 0.099  Train Loss: nan Train Acc: percentlbl: 0.098  
+Time: 72.1566858291626
+{'lr': 0.07078, 'lr_decay': 0.0255, 'ref_steps': 3, 'ref_patience': 0, 'batch_size': 235, 'loss': 'softmax', 'accuracy': 'percent', 'optimizer': 'adam', 'epochs': 2} Epochs: 2
+Result: Valid Loss: 2.30348539352417 Valid Acc: percentlbl: 0.106  Train Loss: 2.304584274166509 Train Acc: percentlbl: 0.102  
+Time: 74.34773445129395
+{'lr': 0.03205, 'lr_decay': 0.06635, 'ref_steps': 1, 'ref_patience': 0, 'batch_size': 53, 'loss': 'margin', 'accuracy': 'percent', 'optimizer': 'gradient', 'epochs': 2} Epochs: 2
+Result: Valid Loss: nan Valid Acc: percentlbl: 0.099  Train Loss: nan Train Acc: percentlbl: 0.098  
+Time: 79.93756794929504
+
+Iteration i=1
+
+{'lr': 0.05328, 'lr_decay': 0.09304, 'ref_steps': 1, 'ref_patience': 3, 'batch_size': 333, 'loss': 'softmax', 'accuracy': 'percent', 'optimizer': 'momentum', 'epochs': 6} Epochs: 6
+Result: Valid Loss: 2.3013401977599615 Valid Acc: percentlbl: 0.112  Train Loss: 2.3020275036493936 Train Acc: percentlbl: 0.109  
+Time: 179.91514706611633
+{'lr': 0.07522, 'lr_decay': 0.05383, 'ref_steps': 5, 'ref_patience': 0, 'batch_size': 92, 'loss': 'margin', 'accuracy': 'percent', 'optimizer': 'gradient', 'epochs': 6} Epochs: 6
+Result: Valid Loss: nan Valid Acc: percentlbl: 0.099  Train Loss: nan Train Acc: percentlbl: 0.098  
+Time: 227.73841643333435
+{'lr': 0.09706, 'lr_decay': 0.08861, 'ref_steps': 5, 'ref_patience': 6, 'batch_size': 70, 'loss': 'sigmoid', 'accuracy': 'percent', 'optimizer': 'momentum', 'epochs': 6} Epochs: 6

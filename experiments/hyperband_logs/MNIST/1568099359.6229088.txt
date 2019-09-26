@@ -1,0 +1,52 @@
+Hyperband parameters 
+Halving Proportion:3 Max amount of rescources:20 
+Hyperparameter ranges
+Lr:[0.1, 1e-05] Lr deca:[0.1, 1e-05] Ref steps:[0, 6] Ref patience:[0, 6] Batch Size:[10, 512] Loss range:['softmax', 'sigmoid', 'margin'] Accuracy Range:['percent'] Optimizer Range:['adam', 'momentum', 'gradient'] 
+
+Bracket s=2
+
+Iteration i=0
+
+{'lr': 0.03605, 'lr_decay': 0.05845, 'ref_steps': 6, 'ref_patience': 2, 'batch_size': 305, 'loss': 'sigmoid', 'accuracy': 'percent', 'optimizer': 'gradient', 'epochs': 2} Epochs: 2
+Result: Valid Loss: 0.11630280120094327 Valid Acc: percentlbl: 0.817  Train Loss: 0.20161108975693331 Train Acc: percentlbl: 0.642  
+Time: 87.21743392944336
+{'lr': 0.08322, 'lr_decay': 0.00764, 'ref_steps': 3, 'ref_patience': 3, 'batch_size': 474, 'loss': 'softmax', 'accuracy': 'percent', 'optimizer': 'adam', 'epochs': 2} Epochs: 2
+Result: Valid Loss: 2.3037129125811835 Valid Acc: percentlbl: 0.108  Train Loss: 2.3026301151997335 Train Acc: percentlbl: 0.110  
+Time: 83.66625547409058
+{'lr': 0.07366, 'lr_decay': 0.02377, 'ref_steps': 4, 'ref_patience': 3, 'batch_size': 71, 'loss': 'margin', 'accuracy': 'percent', 'optimizer': 'adam', 'epochs': 2} Epochs: 2
+Result: Valid Loss: 0.026702510709866453 Valid Acc: percentlbl: 0.101  Train Loss: 0.026683930859794258 Train Acc: percentlbl: 0.100  
+Time: 90.21620059013367
+{'lr': 0.00644, 'lr_decay': 0.0647, 'ref_steps': 5, 'ref_patience': 6, 'batch_size': 239, 'loss': 'sigmoid', 'accuracy': 'percent', 'optimizer': 'momentum', 'epochs': 2} Epochs: 2
+Result: Valid Loss: 0.054545848880495344 Valid Acc: percentlbl: 0.919  Train Loss: 0.08099191615978876 Train Acc: percentlbl: 0.872  
+Time: 86.14087724685669
+{'lr': 0.04614, 'lr_decay': 0.09337, 'ref_steps': 0, 'ref_patience': 6, 'batch_size': 399, 'loss': 'margin', 'accuracy': 'percent', 'optimizer': 'gradient', 'epochs': 2} Epochs: 2
+Result: Valid Loss: nan Valid Acc: percentlbl: 0.098  Train Loss: nan Train Acc: percentlbl: 0.099  
+Time: 83.493727684021
+{'lr': 0.05563, 'lr_decay': 0.04142, 'ref_steps': 1, 'ref_patience': 5, 'batch_size': 276, 'loss': 'sigmoid', 'accuracy': 'percent', 'optimizer': 'momentum', 'epochs': 2} Epochs: 2
+Result: Valid Loss: 0.32515051725663635 Valid Acc: percentlbl: 0.111  Train Loss: 0.3252031362973727 Train Acc: percentlbl: 0.111  
+Time: 79.54631280899048
+{'lr': 0.02179, 'lr_decay': 0.0832, 'ref_steps': 1, 'ref_patience': 4, 'batch_size': 329, 'loss': 'margin', 'accuracy': 'percent', 'optimizer': 'adam', 'epochs': 2} Epochs: 2
+Result: Valid Loss: 0.026206830839120496 Valid Acc: percentlbl: 0.105  Train Loss: 0.02619297550646243 Train Acc: percentlbl: 0.111  
+Time: 78.92161297798157
+{'lr': 0.09545, 'lr_decay': 0.04639, 'ref_steps': 5, 'ref_patience': 0, 'batch_size': 187, 'loss': 'margin', 'accuracy': 'percent', 'optimizer': 'momentum', 'epochs': 2} Epochs: 2
+Result: Valid Loss: nan Valid Acc: percentlbl: 0.098  Train Loss: nan Train Acc: percentlbl: 0.099  
+Time: 78.06256818771362
+{'lr': 0.03879, 'lr_decay': 0.00771, 'ref_steps': 0, 'ref_patience': 6, 'batch_size': 367, 'loss': 'margin', 'accuracy': 'percent', 'optimizer': 'momentum', 'epochs': 2} Epochs: 2
+Result: Valid Loss: 0.026170447387062666 Valid Acc: percentlbl: 0.113  Train Loss: 0.026172288332362563 Train Acc: percentlbl: 0.112  
+Time: 85.23165130615234
+
+Iteration i=1
+
+{'lr': 0.03879, 'lr_decay': 0.00771, 'ref_steps': 0, 'ref_patience': 6, 'batch_size': 367, 'loss': 'margin', 'accuracy': 'percent', 'optimizer': 'momentum', 'epochs': 6} Epochs: 6
+Result: Valid Loss: nan Valid Acc: percentlbl: 0.098  Train Loss: nan Train Acc: percentlbl: 0.099  
+Time: 243.53414797782898
+{'lr': 0.02179, 'lr_decay': 0.0832, 'ref_steps': 1, 'ref_patience': 4, 'batch_size': 329, 'loss': 'margin', 'accuracy': 'percent', 'optimizer': 'adam', 'epochs': 6} Epochs: 6
+Result: Valid Loss: 0.0084841692248198 Valid Acc: percentlbl: 0.783  Train Loss: 0.008820256416651386 Train Acc: percentlbl: 0.773  
+Time: 235.8700349330902
+{'lr': 0.07366, 'lr_decay': 0.02377, 'ref_steps': 4, 'ref_patience': 3, 'batch_size': 71, 'loss': 'margin', 'accuracy': 'percent', 'optimizer': 'adam', 'epochs': 6} Epochs: 6
+Result: Valid Loss: 0.01331151829632204 Valid Acc: percentlbl: 0.668  Train Loss: 0.014092799364460316 Train Acc: percentlbl: 0.645  
+Time: 268.45929503440857
+
+Iteration i=2
+
+{'lr': 0.03879, 'lr_decay': 0.00771, 'ref_steps': 0, 'ref_patience': 6, 'batch_size': 367, 'loss': 'margin', 'accuracy': 'percent', 'optimizer': 'momentum', 'epochs': 18} Epochs: 18

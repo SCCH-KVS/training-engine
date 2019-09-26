@@ -1,0 +1,91 @@
+Hyperband parameters 
+Halving Proportion:3 Max amount of rescources:20 
+Hyperparameter ranges
+Lr:[0.1, 1e-05] Lr deca:[0.1, 1e-05] Ref steps:[0, 1] Ref patience:[0, 1] Batch Size:[10, 512] Loss range:['softmax', 'sigmoid', 'margin'] Accuracy Range:['percent'] Optimizer Range:['adam', 'momentum', 'gradient'] 
+
+Bracket s=2
+
+Iteration i=0
+
+{'lr': 0.03194, 'lr_decay': 0.01475, 'ref_steps': 1, 'ref_patience': 1, 'batch_size': 506, 'loss': 'softmax', 'accuracy': 'percent', 'optimizer': 'gradient', 'epochs': 2} Epochs: 2
+Result: Valid Loss: 1.8195793786680843 Valid Acc: percentlbl: 0.651  Train Loss: 1.6094156639916557 Train Acc: percentlbl: 0.868  
+Time: 740.4050185680389
+{'lr': 0.06655, 'lr_decay': 0.02039, 'ref_steps': 1, 'ref_patience': 0, 'batch_size': 190, 'loss': 'softmax', 'accuracy': 'percent', 'optimizer': 'gradient', 'epochs': 2} Epochs: 2
+Result: Valid Loss: 1.496668223342205 Valid Acc: percentlbl: 0.966  Train Loss: 1.487123987776168 Train Acc: percentlbl: 0.977  
+Time: 754.294599533081
+{'lr': 0.07722, 'lr_decay': 0.09549, 'ref_steps': 1, 'ref_patience': 0, 'batch_size': 407, 'loss': 'sigmoid', 'accuracy': 'percent', 'optimizer': 'adam', 'epochs': 2} Epochs: 2
+Result: Valid Loss: 0.7452353783024167 Valid Acc: percentlbl: 0.099  Train Loss: 0.7452749569307674 Train Acc: percentlbl: 0.099  
+Time: 735.6898424625397
+{'lr': 0.01564, 'lr_decay': 0.07563, 'ref_steps': 0, 'ref_patience': 0, 'batch_size': 411, 'loss': 'softmax', 'accuracy': 'percent', 'optimizer': 'gradient', 'epochs': 2} Epochs: 2
+Result: Valid Loss: 1.9921912106813169 Valid Acc: percentlbl: 0.482  Train Loss: 1.6382145964822104 Train Acc: percentlbl: 0.856  
+Time: 717.9901282787323
+{'lr': 0.00105, 'lr_decay': 0.04837, 'ref_steps': 0, 'ref_patience': 1, 'batch_size': 148, 'loss': 'margin', 'accuracy': 'percent', 'optimizer': 'adam', 'epochs': 2} Epochs: 2
+Result: Valid Loss: 0.05338759066096043 Valid Acc: percentlbl: 0.121  Train Loss: 0.005640983216181659 Train Acc: percentlbl: 0.873  
+Time: 807.8940849304199
+{'lr': 0.02859, 'lr_decay': 0.0424, 'ref_steps': 0, 'ref_patience': 1, 'batch_size': 264, 'loss': 'softmax', 'accuracy': 'percent', 'optimizer': 'adam', 'epochs': 2} Epochs: 2
+Result: Valid Loss: 2.3645235532484716 Valid Acc: percentlbl: 0.097  Train Loss: 2.3620526159510895 Train Acc: percentlbl: 0.099  
+Time: 741.6162853240967
+{'lr': 0.08544, 'lr_decay': 0.0827, 'ref_steps': 0, 'ref_patience': 0, 'batch_size': 503, 'loss': 'margin', 'accuracy': 'percent', 'optimizer': 'momentum', 'epochs': 2} Epochs: 2
+Result: Valid Loss: 0.028747593523956925 Valid Acc: percentlbl: 0.276  Train Loss: 0.008982860373466142 Train Acc: percentlbl: 0.815  
+Time: 702.5084850788116
+{'lr': 0.06487, 'lr_decay': 0.06328, 'ref_steps': 0, 'ref_patience': 0, 'batch_size': 433, 'loss': 'sigmoid', 'accuracy': 'percent', 'optimizer': 'adam', 'epochs': 2} Epochs: 2
+Result: Valid Loss: 0.7453240404526392 Valid Acc: percentlbl: 0.098  Train Loss: 0.7450362952744088 Train Acc: percentlbl: 0.101  
+Time: 708.5881249904633
+{'lr': 0.09827, 'lr_decay': 0.00667, 'ref_steps': 0, 'ref_patience': 1, 'batch_size': 425, 'loss': 'margin', 'accuracy': 'percent', 'optimizer': 'momentum', 'epochs': 2} Epochs: 2
+Result: Valid Loss: 0.05446770232246847 Valid Acc: percentlbl: 0.103  Train Loss: 0.014126805910131051 Train Acc: percentlbl: 0.726  
+Time: 694.66845536232
+
+Iteration i=1
+
+{'lr': 0.08544, 'lr_decay': 0.0827, 'ref_steps': 0, 'ref_patience': 0, 'batch_size': 503, 'loss': 'margin', 'accuracy': 'percent', 'optimizer': 'momentum', 'epochs': 6} Epochs: 6
+Result: Valid Loss: 0.0015441727970378946 Valid Acc: percentlbl: 0.964  Train Loss: 0.0005430693318235821 Train Acc: percentlbl: 0.988  
+Time: 1982.2854554653168
+{'lr': 0.00105, 'lr_decay': 0.04837, 'ref_steps': 0, 'ref_patience': 1, 'batch_size': 148, 'loss': 'margin', 'accuracy': 'percent', 'optimizer': 'adam', 'epochs': 6} Epochs: 6
+Result: Valid Loss: 0.054759701681010714 Valid Acc: percentlbl: 0.099  Train Loss: 0.0396143146598142 Train Acc: percentlbl: 0.160  
+Time: 2268.232964992523
+{'lr': 0.09827, 'lr_decay': 0.00667, 'ref_steps': 0, 'ref_patience': 1, 'batch_size': 425, 'loss': 'margin', 'accuracy': 'percent', 'optimizer': 'momentum', 'epochs': 6} Epochs: 6
+Result: Valid Loss: 0.009095873541141651 Valid Acc: percentlbl: 0.792  Train Loss: 0.003529387365450107 Train Acc: percentlbl: 0.923  
+Time: 2017.796391248703
+
+Iteration i=2
+
+{'lr': 0.08544, 'lr_decay': 0.0827, 'ref_steps': 0, 'ref_patience': 0, 'batch_size': 503, 'loss': 'margin', 'accuracy': 'percent', 'optimizer': 'momentum', 'epochs': 18} Epochs: 18
+Result: Valid Loss: 0.00024085012245702371 Valid Acc: percentlbl: 0.995  Train Loss: 2.66281434895583e-05 Train Acc: percentlbl: 1.000  
+Time: 5887.98986697197
+Bracket s=1
+
+Iteration i=0
+
+{'lr': 0.0545, 'lr_decay': 0.03187, 'ref_steps': 0, 'ref_patience': 1, 'batch_size': 500, 'loss': 'margin', 'accuracy': 'percent', 'optimizer': 'gradient', 'epochs': 6} Epochs: 6
+Result: Valid Loss: 0.03098897851027903 Valid Acc: percentlbl: 0.400  Train Loss: 0.0056678125272608465 Train Acc: percentlbl: 0.921  
+Time: 2024.907348394394
+{'lr': 0.0387, 'lr_decay': 0.07657, 'ref_steps': 0, 'ref_patience': 0, 'batch_size': 367, 'loss': 'softmax', 'accuracy': 'percent', 'optimizer': 'gradient', 'epochs': 6} Epochs: 6
+Result: Valid Loss: 1.483744361944366 Valid Acc: percentlbl: 0.979  Train Loss: 1.4674780758059756 Train Acc: percentlbl: 0.996  
+Time: 2025.91019821167
+{'lr': 0.05051, 'lr_decay': 0.04287, 'ref_steps': 0, 'ref_patience': 0, 'batch_size': 359, 'loss': 'sigmoid', 'accuracy': 'percent', 'optimizer': 'momentum', 'epochs': 6} Epochs: 6
+Result: Valid Loss: 0.6574548935068065 Valid Acc: percentlbl: 0.978  Train Loss: 0.6558205044269562 Train Acc: percentlbl: 0.995  
+Time: 2038.351310968399
+
+Iteration i=1
+
+{'lr': 0.0545, 'lr_decay': 0.03187, 'ref_steps': 0, 'ref_patience': 1, 'batch_size': 500, 'loss': 'margin', 'accuracy': 'percent', 'optimizer': 'gradient', 'epochs': 18} Epochs: 18
+Result: Valid Loss: 0.002340140695672571 Valid Acc: percentlbl: 0.946  Train Loss: 0.0009106203393053471 Train Acc: percentlbl: 0.988  
+Time: 5960.69024014473
+Bracket s=0
+
+Iteration i=0
+
+{'lr': 0.07089, 'lr_decay': 0.0603, 'ref_steps': 0, 'ref_patience': 0, 'batch_size': 252, 'loss': 'margin', 'accuracy': 'percent', 'optimizer': 'gradient', 'epochs': 20} Epochs: 20
+Result: Valid Loss: 0.000742251619311605 Valid Acc: percentlbl: 0.984  Train Loss: 9.072318395007809e-05 Train Acc: percentlbl: 0.999  
+Time: 6860.4828906059265
+{'lr': 0.03258, 'lr_decay': 0.03067, 'ref_steps': 1, 'ref_patience': 0, 'batch_size': 454, 'loss': 'sigmoid', 'accuracy': 'percent', 'optimizer': 'gradient', 'epochs': 20} Epochs: 20
+Result: Valid Loss: 0.6599351595277372 Valid Acc: percentlbl: 0.957  Train Loss: 0.6578591741048373 Train Acc: percentlbl: 0.987  
+Time: 6629.785516738892
+{'lr': 0.0417, 'lr_decay': 0.09927, 'ref_steps': 1, 'ref_patience': 1, 'batch_size': 247, 'loss': 'margin', 'accuracy': 'percent', 'optimizer': 'adam', 'epochs': 20} Epochs: 20
+Result: Valid Loss: 0.05476469570661292 Valid Acc: percentlbl: 0.099  Train Loss: 0.05460804250712196 Train Acc: percentlbl: 0.101  
+Time: 726.1132144927979
+
+Best Result:
+Result: Valid Loss: 0.00024085012245702371 Valid Acc: percentlbl: 0.995  Train Loss: 2.66281434895583e-05 Train Acc: percentlbl: 1.000  
+Configurations {'lr': 0.08544, 'lr_decay': 0.0827, 'ref_steps': 0, 'ref_patience': 0, 'batch_size': 503, 'loss': 'margin', 'accuracy': 'percent', 'optimizer': 'momentum'} 
+Epochs 18
