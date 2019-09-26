@@ -10,7 +10,8 @@
 # Created on : 2/20/2019 4:01 PM $ 
 # by : shepeleva $ 
 # SVN  $
-#
+# Edited on : 9/26/2019 $
+# by : scchwagner $
 
 # --- imports -----------------------------------------------------------------
 
@@ -625,18 +626,17 @@ class TrainRunner(NetRunner):
         json_data.append(hb_prameters)
         json_runs = list()
 
-        set_of_configurations = list()
-
         for s in range(smax, -1, -1):
             r = int(self.max_amount_resources * (self.halving_proportion ** -s))
             n = int(np.floor((smax + 1) / (s + 1)) * self.halving_proportion ** s)
+            set_of_configurations = list()
 
             for i in range(0, s+1):
                 results = list()
                 ni = int(n * (self.halving_proportion ** -i))
                 ri = int(r*(self.halving_proportion**i))
 
-                for x in range(0, n):
+                for x in range(0, ni):
 
                     json_run = list()
                     json_stats = dict()
@@ -713,7 +713,7 @@ class TrainRunner(NetRunner):
         json_best_result.append(json_best_result_config)
         json_data.append(json_best_result)
 
-        global_elapsed_time = time.time() - start_time
+        global_elapsed_time = time.time() - global_start_time
         json_global_time = dict()
         json_global_time['total_time'] = global_elapsed_time
         json_data.append(json_global_time)
@@ -874,10 +874,12 @@ class TrainRunner(NetRunner):
     def _get_random_numbers(self):
         current_config = dict()
 
-        random_lr = np.random.uniform(self.lr_range[0], self.lr_range[1])
-        current_config['lr'] = round(random_lr, len(str(self.lr_range[1])))
-        random_lr_decay = np.random.uniform(self.lr_decay_range[0], self.lr_decay_range[1])
-        current_config['lr_decay'] = round(random_lr_decay, len(str(self.lr_decay_range[1])))
+        #random_lr = np.random.uniform(self.lr_range[0], self.lr_range[1])
+        #current_config['lr'] = round(random_lr, len(str(self.lr_range[1])))
+        #random_lr_decay = np.random.uniform(self.lr_decay_range[0], self.lr_decay_range[1])
+        #current_config['lr_decay'] = round(random_lr_decay, len(str(self.lr_decay_range[1])))
+        current_config['lr'] = random.choice(self.lr_range)
+        current_config['lr_decay'] = random.choice(self.lr_decay_range)
         current_config['ref_steps'] = random.randint(self.ref_steps_range[0], self.ref_steps_range[1])
         current_config['ref_patience'] = random.randint(self.ref_patience_range[0], self.ref_patience_range[1])
         current_config['batch_size'] = random.randint(self.batch_size_range[0], self.batch_size_range[1])
@@ -890,11 +892,13 @@ class TrainRunner(NetRunner):
     def _get_configspace(self):
         cs = CS.ConfigurationSpace()
 
-        lr = CSH.UniformFloatHyperparameter('lr', lower=self.lr_range[0], upper=self.lr_range[1],
-                                             default_value=self.lr_range[0], log=True)
-        lr_decay = CSH.UniformFloatHyperparameter('lr_decay', lower=self.lr_decay_range[0],
-                                                  upper=self.lr_decay_range[1], default_value=self.lr_decay_range[0],
-                                                 log=True)
+        lr = CSH.CategoricalHyperparameter('lr', self.lr_range)
+        lr_decay = CSH.CategoricalHyperparameter('lr_decay', self.lr_decay_range)
+        # lr = CSH.UniformFloatHyperparameter('lr', lower=self.lr_range[0], upper=self.lr_range[1],
+        #                                     default_value=self.lr_range[0], log=True)
+        # lr_decay = CSH.UniformFloatHyperparameter('lr_decay', lower=self.lr_decay_range[0],
+        #                                          upper=self.lr_decay_range[1], default_value=self.lr_decay_range[0],
+        #                                         log=True)
         # IntegerHyperparameter cannot take 0 as lower bound, transform sequential integer to choices,
         ref_steps = CSH.CategoricalHyperparameter('ref_steps',
                                                   self._transform_to_configspace_choices(self.ref_steps_range))

@@ -24,16 +24,16 @@ def load_config():
     config.training_mode = True
     config.data_set = 'CIFAR100'
     config.image_size = [32, 32, 3]
-    config.lr = 0.01  # changable
-    config.lr_decay = 0.2  # changable
-    config.ref_steps = 3  # changable
-    config.ref_patience = [60, 120, 160]  # changable
-    config.batch_size = 120  # changable
-    config.num_epochs = 80  # changable
-    config.loss = 'cross-entropy'  # changable
-    config.optimizer = 'adam'
+    config.lr = 0.019  # changable
+    config.lr_decay = 0.067  # changable
+    config.ref_steps = 10  # changable
+    config.ref_patience = 20  # changable
+    config.batch_size = 129  # changable
+    config.num_epochs = 15  # changable
+    config.loss = 'softmax'  # changable
+    config.optimizer = 'momentum'
     config.mi_record = False
-    config.gpu_load = 0.8
+    config.gpu_load = 0.7
     config.num_classes = 100
     config.class_labels = [str(i) for i in range(100)]
     config.upconv = 'upconv'
@@ -60,7 +60,7 @@ def load_config():
     # enter range with desired value e.g. [0, 0] for continuous
     # or fixed Value for discrete e.g. ['percent']
     # Epochs are definded over max_amount_resources
-    config.hyperband = True
+    config.hyperband = False
     config.halving_proportion = 3  # min 2
     config.max_amount_resources = 200   # no of max epochs (min 2, max 1000)
     config.lr_range = [0.00001, 0.1]  # [0.1, 0.00001]
